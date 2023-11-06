@@ -52,6 +52,37 @@ int initialize_connection(server_config server_cnfg)
 
 }
 
+int respond_to_client(int udpSocket, const char* message, size_t messageLength, struct sockaddr_in* clientAddr, socklen_t clientAddrLen) {
+    if (sendto(udpSocket, message, messageLength, 0, (struct sockaddr*)clientAddr, clientAddrLen) == -1) {
+        std::cerr << "Chyba při odesílání odpovědi: " << strerror(errno) << std::endl;
+        return -1;
+    }
+    return 0;
+}
+
+
+void server_loop(int udpSocket) {
+    char buffer[1024]; // Buffer pro přijatou zprávu
+    struct sockaddr_in clientAddr;
+    socklen_t clientAddrLen = sizeof(clientAddr);
+    while (true) {
+        int bytesRead = recvfrom(udpSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
+        if (bytesRead == -1) {
+            std::cerr << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
+            continue; // Pokračujeme ve smyčce i po chybě
+        }
+        std::string receivedMessage(buffer, bytesRead);
+        std::cerr << "Prijata zprava: " << receivedMessage << std::endl;
+        std::cerr << "Prijato bytu:" << bytesRead << std::endl;
+
+        // Zde byste měli provádět operace s přijatou zprávou.
+        // Například zde můžete zprávu analyzovat a zpracovat.
+
+        // Odpověd můžete poslat zpět klientovi:
+        respond_to_client(udpSocket, buffer, bytesRead, &clientAddr, clientAddrLen);
+    }
+}
+
 int listen(server_config server_cnfg)
 {
     int udpSocket = initialize_connection(server_cnfg);
@@ -62,6 +93,7 @@ int listen(server_config server_cnfg)
     // Zde můžete provádět operace s otevřeným socketem na portu 69 (TFTP).
     std::cerr << "Listening... " << strerror(errno) << std::endl;
 
+    server_loop(udpSocket);
     // Nezapomeňte uzavřít socket, když skončíte s používáním.
     close(udpSocket);
 
