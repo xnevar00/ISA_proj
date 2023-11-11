@@ -1,17 +1,11 @@
 #include <iostream>
 #include "../../include/server/server_class.hpp"
+#include "../../include/packet/tftp-packet-class.hpp"
 
 Server* Server::server_ = nullptr;;
 
-/**
- * Static methods should be defined outside the class.
- */
 Server *Server::getInstance()
 {
-    /**
-     * This is a safer way to create an instance. instance = new Singleton is
-     * dangeruous in case two instance threads wants to access at the same time
-     */
     if(server_==nullptr){
         server_ = new Server();
         server_->port = 69;
@@ -41,7 +35,6 @@ int Server::parse_arguments(int argc, char* argv[], Server *server)
                 } else 
                 {
                     server->port = std::atoi(optarg);
-                    //server_cnfg.port = std::atoi(optarg);
                     if (server->port <= 0 || server->port > 65535) 
                     {
                         return StatusCode::INVALID_ARGUMENTS;
@@ -133,25 +126,63 @@ int Server::respond_to_client(int udpSocket, const char* message, size_t message
     return StatusCode::SUCCESS;
 }
 
+void ClientHandler::handleClient(std::string receivedMessage, int bytesRead){
+    if(bytesRead >= 2)
+    {
+        int opcode = getOpcode(receivedMessage);
+        if (opcode != StatusCode::PACKET_ERROR)
+        {  
+            TFTPPacket *packet;
+            switch (opcode){
+                case Opcode::RRQ:
+                    packet = new RRQPacket();
+                    std::cout << "RRQ packet" << std::endl;
+                    break;
+                case Opcode::WRQ:
+                    packet = new WRQPacket();
+                    std::cout << "RRQ packet" << std::endl;
+                    break;
+                default:
+                    //TODO error packet
+                    break;
+            }
+        } else {
+            std::cout << "Invalid packet" << std::endl;
+            //TODO: poslat zpet error packet na zahajeni komunikace se bere jen rrq a wrq
+        }
+    }
+    return;
+}
 
 void Server::server_loop(int udpSocket) {
-    char buffer[1024]; // Buffer pro přijatou zprávu
+    char buffer[65507]; // Buffer pro přijatou zprávu, max velikost UDP packetu
     struct sockaddr_in clientAddr;
     socklen_t clientAddrLen = sizeof(clientAddr);
     while (true) {
         int bytesRead = recvfrom(udpSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
         if (bytesRead == StatusCode::CONNECTION_ERROR) {
             std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
-            continue; // Pokračujeme ve smyčce i po chybě
+            continue;
         }
+
+        std::cout << "New client!" << std::endl;
+        ClientHandler clientHandlerObj;
         std::string receivedMessage(buffer, bytesRead);
-        std::cout << "Prijata zprava: " << receivedMessage << std::endl;
-        std::cout << "Prijato bytu:" << bytesRead << std::endl;
-
-        // Zde byste měli provádět operace s přijatou zprávou.
-        // Například zde můžete zprávu analyzovat a zpracovat.
-
-        // Odpověd můžete poslat zpět klientovi:
-        respond_to_client(udpSocket, buffer, bytesRead, &clientAddr, clientAddrLen);
+        std::thread clientThread(&ClientHandler::handleClient, &clientHandlerObj, std::ref(receivedMessage), std::ref(bytesRead));
+        clientThreads.push_back(std::move(clientThread));
     }
+}
+
+int ClientHandler::getOpcode(std::string receivedMessage)
+{
+    int opcode = StatusCode::PACKET_ERROR;
+    if(receivedMessage[0] >= '0' && receivedMessage[0] <= '9' && receivedMessage[1] >= '0' && receivedMessage[1] <= '9')
+    {
+        std::string opcodeStr = receivedMessage.substr(0, 2);
+        opcode = std::stoi(opcodeStr);
+    } else{
+        return StatusCode::PACKET_ERROR;
+    }
+    std::cout << "Opcode: " << opcode << std::endl;
+    return opcode;
 }

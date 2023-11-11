@@ -6,6 +6,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <vector>
+#include <thread>
+#include <string>
 #include "../../helper_functions.hpp"
 
 class Server
@@ -15,6 +18,7 @@ protected:
     Server(){}
 
     static Server* server_;
+    std::vector<std::thread> clientThreads;
     int create_udp_socket();
     int setup_udp_socket(int udpSocket, Server *server);
     int initialize_connection(Server *server);
@@ -35,3 +39,8 @@ public:
     int listen(Server *server);
 };
 
+class ClientHandler {
+public:
+    void handleClient(std::string receivedMessage, int bytesRead);
+    int getOpcode(std::string buffer);
+};
