@@ -1,6 +1,6 @@
 #include <iostream>
 #include "../../include/server/server_class.hpp"
-#include "../../include/packet/tftp-packet-class.hpp"
+#include <arpa/inet.h>  // pro inet_ntoa
 
 Server* Server::server_ = nullptr;;
 
@@ -126,7 +126,12 @@ int Server::respond_to_client(int udpSocket, const char* message, size_t message
     return StatusCode::SUCCESS;
 }
 
-void ClientHandler::handleClient(std::string receivedMessage, int bytesRead){
+void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, int clientPort, char clientIP[]){
+    session.clientPort = clientPort;
+
+    std::strncpy(session.clientIP, clientIP, sizeof(session.clientIP) - 1);
+    session.clientIP[sizeof(session.clientIP) - 1] = '\0';
+
     if(bytesRead >= 2)
     {
         int opcode = getOpcode(receivedMessage);
@@ -137,10 +142,12 @@ void ClientHandler::handleClient(std::string receivedMessage, int bytesRead){
                 case Opcode::RRQ:
                     packet = new RRQPacket();
                     std::cout << "RRQ packet" << std::endl;
+                    packet->parse(&session);
                     break;
                 case Opcode::WRQ:
                     packet = new WRQPacket();
                     std::cout << "RRQ packet" << std::endl;
+                    packet->parse(&session);
                     break;
                 default:
                     //TODO error packet
@@ -164,11 +171,18 @@ void Server::server_loop(int udpSocket) {
             std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
             continue;
         }
+        // Získání informací o odesílateli
+        struct sockaddr_in* clientAddrIn = (struct sockaddr_in*)&clientAddr;
+        char clientIP[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(clientAddrIn->sin_addr), clientIP, INET_ADDRSTRLEN);
+
+        // Získání portu odesílatele
+        int clientPort = ntohs(clientAddrIn->sin_port);
 
         std::cout << "New client!" << std::endl;
         ClientHandler clientHandlerObj;
         std::string receivedMessage(buffer, bytesRead);
-        std::thread clientThread(&ClientHandler::handleClient, &clientHandlerObj, std::ref(receivedMessage), std::ref(bytesRead));
+        std::thread clientThread(&ClientHandler::handleClient, &clientHandlerObj, std::ref(receivedMessage), std::ref(bytesRead), std::ref(clientPort), std::ref(clientIP));
         clientThreads.push_back(std::move(clientThread));
     }
 }

@@ -9,7 +9,7 @@
 #include <vector>
 #include <thread>
 #include <string>
-#include "../../helper_functions.hpp"
+#include "../../include/packet/tftp-packet-class.hpp"
 
 class Server
 {
@@ -40,7 +40,9 @@ public:
 };
 
 class ClientHandler {
-public:
-    void handleClient(std::string receivedMessage, int bytesRead);
-    int getOpcode(std::string buffer);
+    public:
+        Session session;
+
+        void handleClient(std::string receivedMessage, int bytesRead, int clientPort, char clientIP[]);
+        int getOpcode(std::string buffer);
 };

@@ -1,5 +1,8 @@
 #include <iostream>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
+#define IPADDRLEN 16
 enum StatusCode {
     SUCCESS = 0,
     INVALID_ARGUMENTS = -1,
@@ -15,6 +18,13 @@ enum class ServerState {
     ReceiveAcknowledgement,
     SendData,
     WaitForAcknowledgement
+};
+
+struct Session {
+    int clientTID = -1;
+    int serverTID = -1;
+    char clientIP[INET_ADDRSTRLEN] = {0};
+    int clientPort = -1;
 };
 
 bool str_is_digits_only(std::string str);
