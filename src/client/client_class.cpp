@@ -41,13 +41,13 @@ int Client::parse_arguments(int argc, char* argv[], Client *client)
             case 'p':
                 if (str_is_digits_only(optarg) == false) 
                 {
-                    return -1;
+                    return StatusCode::INVALID_ARGUMENTS;
                 } else 
                 {
                     client->port = std::atoi(optarg);
                     if (client->port <= 0 || client->port > 65535) 
                     {
-                        return -1;
+                        return StatusCode::INVALID_ARGUMENTS;
                     }
                 }
                 break;
@@ -58,22 +58,22 @@ int Client::parse_arguments(int argc, char* argv[], Client *client)
                 client->destFilepath = optarg;
                 break;
             case '?':
-                return -1;
+                return StatusCode::INVALID_ARGUMENTS;
             default:
                 break;
         }
     }
 
     if (client->hostname.empty() || client->destFilepath.empty()) {
-        return -1;
+        return StatusCode::INVALID_ARGUMENTS;
     }
     if ((argc < 5) || (argc > 9) || (argc%2 != 1)) {
-        return -1;
+        return StatusCode::INVALID_ARGUMENTS;
     }
     std::cout << "Hostname: " << client->hostname << std::endl;
     std::cout << "Port: " << client->port << std::endl;
     std::cout << "Filepath: " << client->filepath << std::endl;
     std::cout << "Dest Filepath: " << client->destFilepath << std::endl;
 
-    return 0;
+    return StatusCode::SUCCESS;
 }
