@@ -12,31 +12,26 @@ enum Opcode {
 
 class TFTPPacket {
 public:
-    virtual void parse(Session* session) const = 0;
+    virtual void parse(Session* session, std::string receivedMessage) const = 0;
     virtual ~TFTPPacket() {};
 };
 
-class RRQPacket : public TFTPPacket {
+class RRQWRQPacket : public TFTPPacket {
 public:
-    void parse(Session* session) const override;
-};
-
-class WRQPacket : public TFTPPacket {
-public:
-    void parse(Session* session) const override;
+    void parse(Session* session, std::string receivedMessage) const override;
 };
 
 class DATAPacket : public TFTPPacket {
 public:
-    void parse(Session* session) const override;
+    void parse(Session* session, std::string receivedMessage) const override;
 };
 
 class ACKPacket : public TFTPPacket {
 public:
-    void parse(Session* session) const override;
+    void parse(Session* session, std::string receivedMessage) const override;
 };
 
 class ERRORPacket : public TFTPPacket {
 public:
-    void parse(Session* session) const override;
+    void parse(Session* session, std::string receivedMessage) const override;
 };

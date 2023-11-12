@@ -140,14 +140,14 @@ void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, int
             TFTPPacket *packet;
             switch (opcode){
                 case Opcode::RRQ:
-                    packet = new RRQPacket();
+                    packet = new RRQWRQPacket();
                     std::cout << "RRQ packet" << std::endl;
-                    packet->parse(&session);
+                    packet->parse(&session, receivedMessage);
                     break;
                 case Opcode::WRQ:
-                    packet = new WRQPacket();
-                    std::cout << "RRQ packet" << std::endl;
-                    packet->parse(&session);
+                    packet = new RRQWRQPacket();
+                    std::cout << "WRQ packet" << std::endl;
+                    packet->parse(&session, receivedMessage);
                     break;
                 default:
                     //TODO error packet
@@ -182,7 +182,8 @@ void Server::server_loop(int udpSocket) {
         std::cout << "New client!" << std::endl;
         ClientHandler clientHandlerObj;
         std::string receivedMessage(buffer, bytesRead);
-        std::thread clientThread(&ClientHandler::handleClient, &clientHandlerObj, std::ref(receivedMessage), std::ref(bytesRead), std::ref(clientPort), std::ref(clientIP));
+        std::cout << "Just received message: " << receivedMessage << std::endl;
+        std::thread clientThread(&ClientHandler::handleClient, &clientHandlerObj, receivedMessage, bytesRead, clientPort, clientIP);
         clientThreads.push_back(std::move(clientThread));
     }
 }
@@ -197,6 +198,5 @@ int ClientHandler::getOpcode(std::string receivedMessage)
     } else{
         return StatusCode::PACKET_ERROR;
     }
-    std::cout << "Opcode: " << opcode << std::endl;
     return opcode;
 }
