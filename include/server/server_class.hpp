@@ -45,4 +45,9 @@ class ClientHandler {
 
         void handleClient(std::string receivedMessage, int bytesRead, int clientPort, char clientIP[]);
         int getOpcode(std::string buffer);
+        void handlePacket(TFTPPacket *packet, std::string receivedMessage);
+        std::string generateResponse(TFTPPacket *packet);
+        int initializeConnection();
+        int createUdpSocket();
+
 };

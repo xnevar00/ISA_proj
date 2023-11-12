@@ -43,8 +43,8 @@ int send_broadcast_message(int udpSocket, Client *client) {
     broadcastAddr.sin_port = htons(client->port); // Port 69 pro TFTP
     broadcastAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK); // Broadcast adresa - pozdeji zmenit na INADDR_BROADCAST?
 
-    const char* message = "02ahoj\0mode\0timeout\0""5\0";
-    if (sendto(udpSocket, message, 22, 0, (struct sockaddr*)&broadcastAddr, sizeof(broadcastAddr)) == -1) {
+    const char* message = "02ahoj\0mode\0timeout\0""5\0blksize\0""512\0";
+    if (sendto(udpSocket, message, 34, 0, (struct sockaddr*)&broadcastAddr, sizeof(broadcastAddr)) == -1) {
         std::cout << "Chyba při odesílání broadcast zprávy: " << strerror(errno) << std::endl;
         close(udpSocket);
         return StatusCode::CONNECTION_ERROR;
@@ -67,8 +67,8 @@ int communicate(Client *client)
     std::cout << "Broadcast message sent." << std::endl;
 
     if (receive_respond_from_server(udpSocket) == StatusCode::CONNECTION_ERROR) {
-    close(udpSocket);
-    return StatusCode::CONNECTION_ERROR;
+        close(udpSocket);
+        return StatusCode::CONNECTION_ERROR;
     }
 
     close(udpSocket);

@@ -54,7 +54,7 @@ int getPairArgument(int optionIndex, std::string receivedMessage, Session *sessi
     {
         return -1;
     }
-    if (option == "blksize" || option == "timeout")
+    if (option == "blksize" || option == "timeout" || option == "tsize")
     {
         if (option == "blksize")
         {
@@ -70,6 +70,14 @@ int getPairArgument(int optionIndex, std::string receivedMessage, Session *sessi
                 return -1;
             }
             session->timeout_option = true;
+        } else if (option == "tsize") 
+        {
+            if(session->tsize_option == true)
+            {
+                return -1;
+            }
+            session->tsize_option = true;
+        
         } else
         {
             return -1;
@@ -87,10 +95,30 @@ int getPairArgument(int optionIndex, std::string receivedMessage, Session *sessi
         {
             session->timeout = std::stoi(option_value);
             std::cout << "Timeout: " << option_value << std::endl;
+        } else if (option == "tsize")
+        {
+            session->tsize = std::stoi(option_value);
+            std::cout << "Timeout: " << option_value << std::endl;
         }
     } else
     {
         return -1;
     }
     return optionIndex;
+}
+
+void setMode(std::string mode, Session *session)
+{
+    if (mode == "netascii")
+    {
+        session->mode = Mode::NETASCII;
+    } else if (mode == "octet")
+    {
+        session->mode = Mode::OCTET;
+    } else
+    {
+        //TODO error packet
+        std::cout << "CHYBA" << std::endl;
+        return;
+    }
 }

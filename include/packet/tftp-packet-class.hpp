@@ -12,26 +12,38 @@ enum Opcode {
 
 class TFTPPacket {
 public:
-    virtual void parse(Session* session, std::string receivedMessage) const = 0;
+    virtual int parse(Session* session, std::string receivedMessage) const = 0;
+    virtual std::string create(Session* session) const = 0;
     virtual ~TFTPPacket() {};
 };
 
 class RRQWRQPacket : public TFTPPacket {
 public:
-    void parse(Session* session, std::string receivedMessage) const override;
+    int parse(Session* session, std::string receivedMessage) const override;
+    std::string create(Session* session) const override;
 };
 
 class DATAPacket : public TFTPPacket {
 public:
-    void parse(Session* session, std::string receivedMessage) const override;
+    int parse(Session* session, std::string receivedMessage) const override;
+    std::string create(Session* session) const override;
 };
 
 class ACKPacket : public TFTPPacket {
 public:
-    void parse(Session* session, std::string receivedMessage) const override;
+    int parse(Session* session, std::string receivedMessage) const override;
+    std::string create(Session* session) const override;
+};
+
+class OACKPacket : public TFTPPacket {
+public:
+    int parse(Session* session, std::string receivedMessage) const override;
+    std::string create(Session* session) const override;
 };
 
 class ERRORPacket : public TFTPPacket {
 public:
-    void parse(Session* session, std::string receivedMessage) const override;
+    int parse(Session* session, std::string receivedMessage) const override;
+    std::string create(Session* session) const override;
+
 };

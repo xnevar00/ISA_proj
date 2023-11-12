@@ -126,6 +126,66 @@ int Server::respond_to_client(int udpSocket, const char* message, size_t message
     return StatusCode::SUCCESS;
 }
 
+std::string ClientHandler::generateResponse(TFTPPacket *packet)
+{
+    std::string response = "";  
+    TFTPPacket *response_packet;
+    if (typeid(*packet) == typeid(RRQWRQPacket)) {
+        if (session.blksize_option || session.timeout_option || session.tsize_option)
+        {
+            response_packet = new OACKPacket();
+            response = response_packet->create(&session);
+        } else
+        {
+            response_packet = new ACKPacket();
+            response = response_packet->create(&session);
+        }
+    }
+    std::cout << "Response: " << response << std::endl;
+
+    return response;
+}
+
+int ClientHandler::createUdpSocket()
+{
+    int udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (udpSocket == -1) {
+        -1;
+    }
+
+    session.udpSocket = udpSocket;
+    return 0;
+}
+
+int ClientHandler::initializeConnection()
+{
+    int udpSocket = createUdpSocket();
+    std::memset(&session.serverAddr, 0, sizeof(session.serverAddr));
+    session.serverAddr.sin_family = AF_INET;
+    session.serverAddr.sin_port = htons(session.clientTID);
+    session.serverAddr.sin_addr.s_addr = inet_addr(session.clientIP);
+
+}
+
+void ClientHandler::handlePacket(TFTPPacket *packet, std::string receivedMessage)
+{
+    int ok = packet->parse(&session, receivedMessage);
+    if (ok == -1) {
+        //TODO error packet
+        return;
+    }
+    initializeConnection();
+    std::string response = generateResponse(packet);
+    int messageLength = response.length();
+    const char* message = response.c_str();
+    if (sendto(session.udpSocket, message, messageLength, 0, (struct sockaddr*)&(session.serverAddr), sizeof(session.serverAddr)) == -1) {
+        std::cout << "Chyba při odesílání UDP paketu: " << strerror(errno) << std::endl;
+    } else {
+        std::cout << "Odeslán UDP paket: " << message << std::endl;
+    }
+
+}
+
 void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, int clientPort, char clientIP[]){
     session.clientPort = clientPort;
 
@@ -141,13 +201,15 @@ void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, int
             switch (opcode){
                 case Opcode::RRQ:
                     packet = new RRQWRQPacket();
+                    session.direction = Direction::Download;
                     std::cout << "RRQ packet" << std::endl;
-                    packet->parse(&session, receivedMessage);
+                    handlePacket(packet, receivedMessage);
                     break;
                 case Opcode::WRQ:
                     packet = new RRQWRQPacket();
+                    session.direction = Direction::Upload;
                     std::cout << "WRQ packet" << std::endl;
-                    packet->parse(&session, receivedMessage);
+                    handlePacket(packet, receivedMessage);
                     break;
                 default:
                     //TODO error packet
