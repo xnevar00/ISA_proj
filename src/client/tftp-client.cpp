@@ -12,7 +12,32 @@ int create_udp_socket() {
 
     if (udpSocket == -1) {
         std::cout << "Chyba při vytváření socketu: " << strerror(errno) << std::endl;
+        return -1;
     }
+
+    
+    struct sockaddr_in serverAddr;
+    std::memset(&serverAddr, 0, sizeof(serverAddr));
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serverAddr.sin_port = htons(0);
+    
+
+    if (bind(udpSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
+        std::cout << "Chyba při bind: " << strerror(errno) << std::endl;
+        close(udpSocket);
+        return -1;
+    }
+
+    struct sockaddr_in localAddress;
+    socklen_t addressLength = sizeof(localAddress);
+    getsockname(udpSocket, (struct sockaddr*)&localAddress, &addressLength);
+
+
+    int port = ntohs(localAddress.sin_port);
+
+    std::cout << "Klientský socket běží na portu: " << port << std::endl;
+
     return udpSocket;
 }
 

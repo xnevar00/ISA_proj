@@ -43,7 +43,7 @@ class ClientHandler {
     public:
         Session session;
 
-        void handleClient(std::string receivedMessage, int bytesRead, int clientPort, char clientIP[]);
+        void handleClient(std::string receivedMessage, int bytesRead, sockaddr_in clientAddr, socklen_t clientAddrLen);
         int getOpcode(std::string buffer);
         void handlePacket(TFTPPacket *packet, std::string receivedMessage);
         std::string generateResponse(TFTPPacket *packet);

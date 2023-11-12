@@ -150,7 +150,7 @@ int ClientHandler::createUdpSocket()
 {
     int udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
     if (udpSocket == -1) {
-        -1;
+        return -1;
     }
 
     session.udpSocket = udpSocket;
@@ -160,10 +160,7 @@ int ClientHandler::createUdpSocket()
 int ClientHandler::initializeConnection()
 {
     int udpSocket = createUdpSocket();
-    std::memset(&session.serverAddr, 0, sizeof(session.serverAddr));
-    session.serverAddr.sin_family = AF_INET;
-    session.serverAddr.sin_port = htons(session.clientTID);
-    session.serverAddr.sin_addr.s_addr = inet_addr(session.clientIP);
+
 
 }
 
@@ -177,20 +174,14 @@ void ClientHandler::handlePacket(TFTPPacket *packet, std::string receivedMessage
     initializeConnection();
     std::string response = generateResponse(packet);
     int messageLength = response.length();
-    const char* message = response.c_str();
-    if (sendto(session.udpSocket, message, messageLength, 0, (struct sockaddr*)&(session.serverAddr), sizeof(session.serverAddr)) == -1) {
-        std::cout << "Chyba při odesílání UDP paketu: " << strerror(errno) << std::endl;
-    } else {
-        std::cout << "Odeslán UDP paket: " << message << std::endl;
-    }
+
+    sendto(session.udpSocket, response.c_str(), response.length(), 0, (struct sockaddr*)&(session.clientAddr), sizeof(session.clientAddr));
+    std::cout << "Just sent message: " << response << std::endl;
 
 }
 
-void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, int clientPort, char clientIP[]){
-    session.clientPort = clientPort;
-
-    std::strncpy(session.clientIP, clientIP, sizeof(session.clientIP) - 1);
-    session.clientIP[sizeof(session.clientIP) - 1] = '\0';
+void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, sockaddr_in clientAddr, socklen_t clientAddrLen){
+    session.clientAddr = clientAddr;
 
     if(bytesRead >= 2)
     {
@@ -245,7 +236,7 @@ void Server::server_loop(int udpSocket) {
         ClientHandler clientHandlerObj;
         std::string receivedMessage(buffer, bytesRead);
         std::cout << "Just received message: " << receivedMessage << std::endl;
-        std::thread clientThread(&ClientHandler::handleClient, &clientHandlerObj, receivedMessage, bytesRead, clientPort, clientIP);
+        std::thread clientThread(&ClientHandler::handleClient, &clientHandlerObj, receivedMessage, bytesRead, clientAddr, clientAddrLen);
         clientThreads.push_back(std::move(clientThread));
     }
 }

@@ -35,8 +35,6 @@ struct Session {
     int direction = -1;
     int clientTID = -1;
     int serverTID = -1;
-    char clientIP[INET_ADDRSTRLEN] = {0};
-    int clientPort = -1;
     std::string filename;
     std::string mode;
     bool blksize_option = false;
@@ -46,7 +44,7 @@ struct Session {
     bool tsize_option = false;
     int tsize = -1;
     int udpSocket = -1;
-    struct sockaddr_in serverAddr;
+    struct sockaddr_in clientAddr;
 };
 
 bool str_is_digits_only(std::string str);
