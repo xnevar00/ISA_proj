@@ -1,0 +1,47 @@
+SERVER:
+
+   prijmout RRQ  -> do RRQ vetve
+   prijmout WRQ  -> do WRQ vetve
+
+RRQ:
+                 ->  odeslat OACK
+		 ->  odeslat DATA
+   odeslat OACK  ->  cekat na ACK	# v pripade RRQ s options
+   odeslat DATA  ->  cekat na ACK	# pri prenosu data packetu
+
+
+   cekat na ACK  ->  odeslat DATA	# pri prenosu data packetu
+   cekat na ACK  ->  			# v pripade posledniho odeslaneho data packetu
+
+WRQ:
+		 ->  odeslat OACK
+		 ->  odeslat ACK
+   odeslat OACK  ->  cekat na DATA	# v pripade WRQ s options
+   odeslat ACK   ->  cekat na DATA	# pri prenosu data packetu i v pripade prvniho packetu WRQ bez options
+
+   cekat na DATA ->  odeslat ACK	# pri prenosu data packetu
+   odeslat ACK   ->  			# v pripade posledniho prijateho data packetu
+
+KLIENT:
+
+RRQ:
+   odeslat RRQO  ->  cekat na OACK/DATA
+   odeslat RRQ   ->  cekat na DATA
+   cekat na OACK ->  odeslat ACK
+   cekat na DATA ->  odeslat ACK
+   odeslat ACK   ->  cekat na DATA
+   odeslat ACK   ->
+   
+
+WRQ:
+   odeslat WRQO  ->  cekat na OACK/ACK
+   odeslat WRQ   ->  cekat na ACK
+   cekat na OACK ->  odeslat DATA
+   cekat na ACK  ->  odeslat DATA
+   odeslat DATA  ->  cekat na ACK
+   cekat na ACK  ->
+
+
+
+
+

@@ -55,7 +55,26 @@ std::string RRQWRQPacket::create(Session* session) const {
 }
 
 int DATAPacket::parse(Session* session, std::string receivedMessage) const {
-    std::cout << "DATAPacket parsing\n";
+    if(receivedMessage[2] >= '0' && receivedMessage[2] <= '9' && receivedMessage[3] >= '0' && receivedMessage[3] <= '9')
+    {
+        std::string block_number_str = receivedMessage.substr(2, 2);
+        int block_number_int = std::stoi(block_number_str);
+        if (block_number_int != session->block_number + 1)
+        {
+            return -1;
+        } else
+        {
+            session->block_number = block_number_int;
+            std::string data = receivedMessage.substr(4);
+            std::cout << "DATA: " << data << std::endl;
+            if ((int)(data.length()) < session->blksize)
+            {
+                session->last_packet = true;
+            }
+        }
+    } else {
+        return -1;
+    }
     return 0;
 }
 

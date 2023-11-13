@@ -122,3 +122,16 @@ void setMode(std::string mode, Session *session)
         return;
     }
 }
+
+int setupFileForUpload(Session *session)
+{
+    std::string full_filepath = session->root_dirpath + "/" + session->filename;
+    session->file.open(full_filepath, std::ios::out | std::ios::app | std::ios::binary);
+
+    if (!(session->file).is_open()) {
+        std::cerr << "Error opening the file" << std::endl;
+        return -1;
+    }
+    std::cout << "File opened" << std::endl;
+    return 0;
+}

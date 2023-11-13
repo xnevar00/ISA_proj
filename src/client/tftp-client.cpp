@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netdb.h>
 #include <unistd.h>
 #include "../../include/client/client_class.hpp"
 
@@ -62,14 +63,28 @@ int receive_respond_from_server(int udpSocket) {
 }
 
 int send_broadcast_message(int udpSocket, Client *client) {
-    struct sockaddr_in broadcastAddr;
-    std::memset(&broadcastAddr, 0, sizeof(broadcastAddr));
-    broadcastAddr.sin_family = AF_INET;
-    broadcastAddr.sin_port = htons(client->port); // Port 69 pro TFTP
-    broadcastAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK); // Broadcast adresa - pozdeji zmenit na INADDR_BROADCAST?
+    struct sockaddr_in addr;
+    std::memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(client->port); // Port 69 pro TFTP
 
-    const char* message = "02ahoj\0mode\0timeout\0""5\0blksize\0""512\0";
-    if (sendto(udpSocket, message, 34, 0, (struct sockaddr*)&broadcastAddr, sizeof(broadcastAddr)) == -1) {
+    // Převod hostname na IP adresu
+    struct addrinfo hints, *res;
+    std::memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+
+    if (getaddrinfo(client->hostname.c_str(), nullptr, &hints, &res) != 0) {
+        std::cerr << "Chyba při získávání informací o adrese." << std::endl;
+        return StatusCode::CONNECTION_ERROR;
+    }
+
+    struct sockaddr_in *addr_in = (struct sockaddr_in *)res->ai_addr;
+    addr.sin_addr = addr_in->sin_addr;
+
+    freeaddrinfo(res); // Uvolnění struktury addrinfo
+
+    const char* message = "02test.txt\0octet\0timeout\0""5\0blksize\0""512\0";
+    if (sendto(udpSocket, message, 39, 0, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
         std::cout << "Chyba při odesílání broadcast zprávy: " << strerror(errno) << std::endl;
         close(udpSocket);
         return StatusCode::CONNECTION_ERROR;

@@ -126,62 +126,47 @@ int Server::respond_to_client(int udpSocket, const char* message, size_t message
     return StatusCode::SUCCESS;
 }
 
-std::string ClientHandler::generateResponse(TFTPPacket *packet)
-{
-    std::string response = "";  
-    TFTPPacket *response_packet;
-    if (typeid(*packet) == typeid(RRQWRQPacket)) {
-        if (session.blksize_option || session.timeout_option || session.tsize_option)
-        {
-            response_packet = new OACKPacket();
-            response = response_packet->create(&session);
-        } else
-        {
-            response_packet = new ACKPacket();
-            response = response_packet->create(&session);
+void Server::server_loop(int udpSocket) {
+    char buffer[65507]; // Buffer pro přijatou zprávu, max velikost UDP packetu
+    struct sockaddr_in clientAddr;
+    socklen_t clientAddrLen = sizeof(clientAddr);
+    while (true) {
+        int bytesRead = recvfrom(udpSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
+        if (bytesRead == StatusCode::CONNECTION_ERROR) {
+            std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
+            continue;
         }
+
+        std::cout << "New client!" << std::endl;
+        ClientHandler clientHandlerObj;
+        std::string receivedMessage(buffer, bytesRead);
+        std::cout << "Just received message: " << receivedMessage << std::endl;
+        std::thread clientThread(&ClientHandler::handleClient, &clientHandlerObj, receivedMessage, bytesRead, clientAddr, clientAddrLen, root_dirpath);
+        clientThreads.push_back(std::move(clientThread));
     }
-    std::cout << "Response: " << response << std::endl;
-
-    return response;
 }
 
-int ClientHandler::createUdpSocket()
-{
-    int udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (udpSocket == -1) {
-        return -1;
-    }
-
-    session.udpSocket = udpSocket;
-    return 0;
-}
-
-int ClientHandler::initializeConnection()
-{
-    int udpSocket = createUdpSocket();
 
 
-}
 
-void ClientHandler::handlePacket(TFTPPacket *packet, std::string receivedMessage)
-{
-    int ok = packet->parse(&session, receivedMessage);
-    if (ok == -1) {
-        //TODO error packet
-        return;
-    }
-    initializeConnection();
-    std::string response = generateResponse(packet);
-    int messageLength = response.length();
 
-    sendto(session.udpSocket, response.c_str(), response.length(), 0, (struct sockaddr*)&(session.clientAddr), sizeof(session.clientAddr));
-    std::cout << "Just sent message: " << response << std::endl;
 
-}
 
-void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, sockaddr_in clientAddr, socklen_t clientAddrLen){
+
+
+
+
+
+
+
+
+
+
+
+
+void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, sockaddr_in clientAddr, socklen_t clientAddrLen, std::string root_dirpath){
     session.clientAddr = clientAddr;
+    session.root_dirpath = root_dirpath;
 
     if(bytesRead >= 2)
     {
@@ -214,33 +199,6 @@ void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, soc
     return;
 }
 
-void Server::server_loop(int udpSocket) {
-    char buffer[65507]; // Buffer pro přijatou zprávu, max velikost UDP packetu
-    struct sockaddr_in clientAddr;
-    socklen_t clientAddrLen = sizeof(clientAddr);
-    while (true) {
-        int bytesRead = recvfrom(udpSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
-        if (bytesRead == StatusCode::CONNECTION_ERROR) {
-            std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
-            continue;
-        }
-        // Získání informací o odesílateli
-        struct sockaddr_in* clientAddrIn = (struct sockaddr_in*)&clientAddr;
-        char clientIP[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &(clientAddrIn->sin_addr), clientIP, INET_ADDRSTRLEN);
-
-        // Získání portu odesílatele
-        int clientPort = ntohs(clientAddrIn->sin_port);
-
-        std::cout << "New client!" << std::endl;
-        ClientHandler clientHandlerObj;
-        std::string receivedMessage(buffer, bytesRead);
-        std::cout << "Just received message: " << receivedMessage << std::endl;
-        std::thread clientThread(&ClientHandler::handleClient, &clientHandlerObj, receivedMessage, bytesRead, clientAddr, clientAddrLen);
-        clientThreads.push_back(std::move(clientThread));
-    }
-}
-
 int ClientHandler::getOpcode(std::string receivedMessage)
 {
     int opcode = StatusCode::PACKET_ERROR;
@@ -252,4 +210,166 @@ int ClientHandler::getOpcode(std::string receivedMessage)
         return StatusCode::PACKET_ERROR;
     }
     return opcode;
+}
+
+
+void ClientHandler::handlePacket(TFTPPacket *packet, std::string receivedMessage)
+{
+    int ok = packet->parse(&session, receivedMessage);
+    if (ok == -1) {
+        //TODO error packet
+        return;
+    }
+    if (session.direction == Direction::Upload)
+    {
+        if (setupFileForUpload(&session) == -1)
+        {
+            //TODO error packet
+            return;
+        }
+    }
+    if (createUdpSocket() == -1)
+    {
+        std::cout << "Chyba při vytvareni socketu: " << strerror(errno) << std::endl;
+        return;
+    }
+    std::string response = generateResponse(packet);
+    int messageLength = response.length();
+
+    if (sendto(session.udpSocket, response.c_str(), response.length(), 0, (struct sockaddr*)&(session.clientAddr), sizeof(session.clientAddr)) == -1)
+    {
+        std::cout << "Chyba při odesílání odpovědi: " << strerror(errno) << std::endl;
+        return;
+    }
+    std::cout << "Just sent message: " << response << std::endl;
+    delete packet;
+
+}
+
+int ClientHandler::createUdpSocket()
+{
+    int udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (udpSocket == -1) {
+        return -1;
+    }
+
+    session.udpSocket = udpSocket;
+
+    struct sockaddr_in serverAddr;
+    std::memset(&serverAddr, 0, sizeof(serverAddr));
+    
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(0);
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+
+    // bind
+    if (bind(session.udpSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        std::cout << "Chyba při bindování socketu: " << strerror(errno) << std::endl;
+        close(udpSocket);
+        return -1;
+    }
+
+    struct sockaddr_in localAddress;
+    socklen_t addressLength = sizeof(localAddress);
+    getsockname(udpSocket, (struct sockaddr*)&localAddress, &addressLength);
+
+
+    int port = ntohs(localAddress.sin_port);
+
+    std::cout << "Serverovský socket běží na portu: " << port << std::endl;
+
+    return 0;
+}
+
+std::string ClientHandler::generateResponse(TFTPPacket *packet)
+{
+    std::string response = "";  
+    TFTPPacket *response_packet;
+    if (typeid(*packet) == typeid(RRQWRQPacket)) {
+        if (session.blksize_option || session.timeout_option || session.tsize_option)
+        {
+            response_packet = new OACKPacket();
+            response = response_packet->create(&session);
+        } else
+        {
+            response_packet = new ACKPacket();
+            response = response_packet->create(&session);
+        }
+    }
+    std::cout << "Response: " << response << std::endl;
+
+    return response;
+}
+
+int ClientHandler::receiveData()
+{
+    char received_data[65507]; // Buffer pro přijatou zprávu, max velikost UDP packetu
+    struct sockaddr_in clientAddr;
+    socklen_t clientAddrLen = sizeof(clientAddr);
+
+    int bytesRead = recvfrom(session.udpSocket, received_data, sizeof(received_data), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
+    if (bytesRead == StatusCode::CONNECTION_ERROR) {
+        std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
+        return -1;
+    }
+
+    std::string received_message(received_data, bytesRead);
+    if (bytesRead < 4)
+    {
+        //TODO error packet
+        return -1;
+    }
+    int opcode = getOpcode(received_message);
+    if (opcode != Opcode::DATA)
+    {
+        //TODO error packet
+        return -1;
+    } else
+    {
+        TFTPPacket *packet = new DATAPacket();
+        if (packet->parse(&session, received_message) == -1)
+        {
+            //TODO error packet
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int ClientHandler::transferFile()
+{
+    while(session.last_packet == false)
+    {
+        switch(current_state){
+            case ClientHandlerState::WaitForTransfer:
+                if(session.direction == Direction::Download)
+                {
+                    current_state = ClientHandlerState::SendData;
+                } else if (session.direction == Direction::Upload)
+                {
+                    current_state = ClientHandlerState::ReceiveData;
+                }
+                break;
+            case ClientHandlerState::SendAck:
+                //send data
+                current_state = ClientHandlerState::ReceiveData;
+                break;
+            case ClientHandlerState::ReceiveData:
+                //receive data
+                current_state = ClientHandlerState::SendAck;
+                break;
+            case ClientHandlerState::SendData:
+                //send data
+                current_state = ClientHandlerState::ReceiveAck;
+                break;
+            case ClientHandlerState::ReceiveAck:
+                //receive ack
+                current_state = ClientHandlerState::SendData;
+                break;
+            case ClientHandlerState::SendError:
+                //send error
+                break;
+        }
+    }
+    return 0;
 }
