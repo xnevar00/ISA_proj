@@ -6,6 +6,9 @@
 #include <vector>
 
 #define IPADDRLEN 16
+#define MINPORTVALUE 1
+#define MAXPORTVALUE 65535
+
 enum StatusCode {
     SUCCESS = 0,
     INVALID_ARGUMENTS = -1,
@@ -53,7 +56,7 @@ struct Session {
 };
 
 struct ClientSession {
-    int serverTID = -1;
+    //int serverTID = -1;
     int udpSocket = -1;
     struct sockaddr_in serverAddr;
     int initial_port = -1;

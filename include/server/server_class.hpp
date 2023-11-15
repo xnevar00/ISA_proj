@@ -52,11 +52,9 @@ class ClientHandler {
         int createUdpSocket();
         int transferFile();
         int receiveData();
-        int sendAck();
         void writeData(std::vector<char> data);
         int setupFileForUpload();
-        int sendData();
         int setupFileForDownload();
-        int receiveAck();
+        int handleSendingData();
 
 };

@@ -39,7 +39,120 @@ TFTPPacket* TFTPPacket::parsePacket(std::string receivedMessage)
     return packet;
 }
 
+int TFTPPacket::sendAck(int block_number, int udp_socket, sockaddr_in addr)
+{
+    ACKPacket response_packet(block_number);
+    if (response_packet.send(udp_socket, addr) == -1)
+    {
+        return -1;
+    }
+    std::cout << "Just sent ack packet" << std::endl;
+    return 0;
+}
 
+int TFTPPacket::receiveAck(int udp_socket)
+{
+    std::cout << "Waiting for ACK packet..." << std::endl;
+    char received_data[65507];
+    struct sockaddr_in addr;
+    socklen_t addrLen = sizeof(addr);
+
+    int bytesRead = recvfrom(udp_socket, received_data, sizeof(received_data), 0, (struct sockaddr*)&addr, &addrLen);
+    if (bytesRead == -1) {
+        std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
+        return -1;
+    }
+
+    std::string received_message(received_data, bytesRead);
+    std::cout << "Received ACK packet." << received_message << std::endl;
+    if (bytesRead < 4)
+    {
+        //TODO error packet
+        return -1;
+    }
+
+    TFTPPacket *packet = TFTPPacket::parsePacket(received_message);
+    if (packet == nullptr)
+    {
+        //TODO error packet
+        return -1;
+    }
+    if (packet->opcode != Opcode::ACK)
+    {
+        //TODO error packet
+        return -1;
+    }
+}
+
+int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, std::ofstream *file, bool *last_packet)
+{
+    char received_data[65507]; // Buffer pro přijatou zprávu, max velikost UDP packetu
+    struct sockaddr_in clientAddr;
+    socklen_t clientAddrLen = sizeof(clientAddr);
+
+    std::cout << "cekam na data" << std::endl;
+    int bytesRead = recvfrom(udp_socket, received_data, sizeof(received_data), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
+    if (bytesRead == -1) {
+        std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
+        return -1;
+    }
+
+    std::string received_message(received_data, bytesRead);
+    std::cout << "Prijata zprava:" << received_message << std::endl;
+    if (bytesRead < 4)
+    {
+        //TODO error packet
+        return -1;
+    }
+
+    TFTPPacket *packet = TFTPPacket::parsePacket(received_message);
+    if (packet == nullptr)
+    {
+        //TODO error packet
+        return -1;
+    }
+
+    if (packet->opcode != Opcode::DATA)
+    {
+        //TODO error packet
+        return -1;
+    }
+    if (packet->blknum != block_number)
+    {
+        //TODO osetrit
+        std::cout << "Wrong block number!" << std::endl;
+        return -1;
+    }
+    file->write(packet->data.data(), packet->data.size());
+    if ((unsigned short int)packet->data.size() < block_size)
+    {
+        *last_packet = true;
+        closeFile(file);
+    }
+
+    return 0;
+}
+
+int TFTPPacket::sendData(int udp_socket, sockaddr_in addr, int block_number, int block_size, int bytes_read, std::vector<char> data, bool *last_packet)
+{
+    if (bytes_read <= 0) {
+        std::cout << "Chyba při čtení ze stdin" << std::endl;
+        return -1;
+    }
+
+    data.resize(bytes_read);
+    if (data.size() < block_size)
+    {
+        *last_packet = true;
+    }
+    DATAPacket response_packet(block_number, data);
+    if (response_packet.send(udp_socket, addr) == -1)
+    {
+        return -1;
+    }
+    std::cout << "Odeslan data packet" << std::endl;
+    return 0;
+}
 
 RRQWRQPacket::RRQWRQPacket(int opcode, std::string filename, std::string mode, int timeout, int blksize, int tsize)
 {

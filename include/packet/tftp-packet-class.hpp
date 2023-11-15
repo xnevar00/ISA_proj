@@ -38,6 +38,10 @@ public:
     virtual std::string create(Session* session) const = 0;
     virtual int send(int udpSocket, sockaddr_in destination) const = 0;
     static TFTPPacket *parsePacket(std::string receivedMessage);
+    static int sendAck(int block_number, int udp_socket, sockaddr_in addr);
+    static int receiveAck(int udp_socket);
+    static int receiveData(int udp_socket, int block_number, int block_size, std::ofstream *file, bool *last_packet);
+    static int sendData(int udp_socket, sockaddr_in addr, int block_number, int block_size, int bytes_read, std::vector<char> data, bool *last_packet);
 };
 
 class RRQWRQPacket : public TFTPPacket {

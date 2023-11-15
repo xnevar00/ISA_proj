@@ -236,9 +236,13 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
         std::cout << "Just sent OACK with block number: " << OACK_response_packet.blknum << std::endl;
     } else
     {
-        ACKPacket ACK_response_packet(session.block_number);
-        ACK_response_packet.send(session.udpSocket, session.clientAddr);
-        std::cout << "Just sent ACK with block number: " << ACK_response_packet.blknum << std::endl;
+        if (session.direction == Direction::Download)
+        {
+            current_state = TransferState::SendData;
+        } else if (session.direction == Direction::Upload)
+        {
+            current_state = TransferState::SendAck;
+        }
     }
     delete packet;
     transferFile();
@@ -363,27 +367,10 @@ int ClientHandler::setupFileForUpload()
 void ClientHandler::writeData(std::vector<char> data)
 {
     file.write(data.data(), data.size());
-    //file.write("zapis", 5);
-        
-    //std::cout << file.good() << std::endl;
-    //std::cout << file.bad() << std::endl;
-    //std::cout << file.fail() << std::endl;
     return;
 }
 
-int ClientHandler::sendAck()
-{
-    ACKPacket response_packet(session.block_number);
-    session.block_number++;
-    if (response_packet.send(session.udpSocket, session.clientAddr) == -1)
-    {
-        return -1;
-    }
-    std::cout << "Just sent ack packet" << std::endl;
-    return 0;
-}
-
-int ClientHandler::sendData()
+int ClientHandler::handleSendingData()
 {
     std::vector<char> data;
     char buffer[session.blksize];
@@ -391,60 +378,8 @@ int ClientHandler::sendData()
     data.insert(data.end(), buffer, buffer + session.blksize);
     session.block_number++;
     ssize_t bytesRead = downloaded_file.gcount();
-    
-    if (bytesRead <= 0) {
-        std::cout << "Chyba při čtení ze souboru" << std::endl;
-        return -1;
-    }
-    std::cout << session.blksize << " precteno " << bytesRead << std::endl;
-    data.resize(bytesRead);
-    if (bytesRead < session.blksize)
-    {
-        session.last_packet = true;
-    }
-    DATAPacket response_packet(session.block_number, data);
-    if (response_packet.send(session.udpSocket, session.clientAddr) == -1)
-    {
-        return -1;
-    }
-    std::cout << "Just sent data packet" << std::endl;
-    return 0;
 
-}
-
-int ClientHandler::receiveAck()
-{
-    std::cout << "cekam na ack" << std::endl;
-    char received_data[65507]; // Buffer pro přijatou zprávu, max velikost UDP packetu
-    struct sockaddr_in addr;
-    socklen_t addrLen = sizeof(addr);
-
-    int bytesRead = recvfrom(session.udpSocket, received_data, sizeof(received_data), 0, (struct sockaddr*)&addr, &addrLen);
-    if (bytesRead == StatusCode::CONNECTION_ERROR) {
-        std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
-        return -1;
-    }
-
-    std::string received_message(received_data, bytesRead);
-    if (bytesRead < 4)
-    {
-        //TODO error packet
-        return -1;
-    }
-
-    TFTPPacket *packet = TFTPPacket::parsePacket(received_message);
-    if (packet == nullptr)
-    {
-        //TODO error packet
-        return -1;
-    }
-    if (packet->opcode != Opcode::ACK)
-    {
-        //TODO error packet
-        return -1;
-    }
-    std::cout << "dosel ack" << std::endl;
-    return -1;
+    TFTPPacket::sendData(session.udpSocket, session.clientAddr, session.block_number, session.blksize, bytesRead, data, &(session.last_packet));
 }
 
 int ClientHandler::transferFile()
@@ -463,22 +398,23 @@ int ClientHandler::transferFile()
                 }
                 break;
             case TransferState::SendAck:
-                sendAck();
+                TFTPPacket::sendAck(session.block_number, session.udpSocket, session.clientAddr);
+                session.block_number++;
                 current_state = TransferState::ReceiveData;
                 break;
             case TransferState::ReceiveData:
                 //receive data
-                receiveData();
+                TFTPPacket::receiveData(session.udpSocket, session.block_number, session.blksize, &(file), &(session.last_packet));
                 current_state = TransferState::SendAck;
                 break;
             case TransferState::SendData:
                 //send data
-                sendData();
+                handleSendingData();
                 current_state = TransferState::ReceiveAck;
                 break;
             case TransferState::ReceiveAck:
                 //receive ack
-                receiveAck();
+                TFTPPacket::receiveAck(session.udpSocket);
                 current_state = TransferState::SendData;
                 break;
             case TransferState::SendError:
@@ -487,7 +423,8 @@ int ClientHandler::transferFile()
         }
     }
     closeFile(&(file));
-    sendAck();
+    TFTPPacket::sendAck(session.block_number, session.udpSocket, session.clientAddr);
+    session.block_number++;
     std::cout << "Transfer finished" << std::endl;
     return 0;
 }
