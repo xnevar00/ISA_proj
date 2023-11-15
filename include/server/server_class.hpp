@@ -42,14 +42,17 @@ public:
 class ClientHandler {
     public:
         Session session;
-        ClientHandlerState current_state = ClientHandlerState::WaitForTransfer;
+        std::ofstream file;
+        TransferState current_state = TransferState::WaitForTransfer;
 
+        ClientHandler(){};
         void handleClient(std::string receivedMessage, int bytesRead, sockaddr_in clientAddr, socklen_t clientAddrLen, std::string root_dirpath);
-        int getOpcode(std::string buffer);
-        void handlePacket(TFTPPacket *packet, std::string receivedMessage);
-        std::string generateResponse(TFTPPacket *packet);
+        void handlePacket(TFTPPacket *packet);
         int createUdpSocket();
         int transferFile();
         int receiveData();
+        int sendAck();
+        void writeData(std::vector<char> data);
+        int setupFileForUpload();
 
 };

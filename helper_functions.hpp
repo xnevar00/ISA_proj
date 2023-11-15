@@ -3,6 +3,7 @@
 #include <netinet/in.h>
 #include <string>
 #include <fstream>
+#include <vector>
 
 #define IPADDRLEN 16
 enum StatusCode {
@@ -13,7 +14,7 @@ enum StatusCode {
     PACKET_ERROR = -4,
 };
 
-enum class ClientHandlerState {
+enum class TransferState {
     WaitForTransfer,
     SendAck,
     ReceiveData,
@@ -38,19 +39,27 @@ struct Session {
     int serverTID = -1;
     std::string filename = "";
     std::string mode;
-    bool blksize_option = false;
     int blksize = 512;
-    bool timeout_option = false;
-    int timeout = -1;  
-    bool tsize_option = false;
+    bool blksize_set = false;
+    int timeout = -1;
     int tsize = -1;
     int udpSocket = -1;
     struct sockaddr_in clientAddr;
-    int block_number = 0;
+    unsigned short block_number = 0;
     bool last_packet = false;
     std::string latest_data = "";
     std::string root_dirpath = "";
     std::ofstream file;
+};
+
+struct ClientSession {
+    int serverTID = -1;
+    int udpSocket = -1;
+    struct sockaddr_in serverAddr;
+    int initial_port = -1;
+    std::string hostname = "";
+    std::string filepath = "";
+    std::string destFilepath = "";
 };
 
 bool str_is_digits_only(std::string str);
@@ -59,5 +68,7 @@ std::string getArgument(int startIndex, std::string receivedMessage);
 int getAnotherStartIndex(int startIndex, std::string receivedMessage);
 std::string getSingleArgument(int startIndex, std::string receivedMessage);
 int getPairArgument(int optionIndex, std::string receivedMessage, Session *session);
-void setMode(std::string mode, Session *session);
-int setupFileForUpload(Session *session);
+int getOpcode(std::string receivedMessage);
+void closeFile(std::ofstream *file);
+int setOption(int *option, int *optionIndex, std::string receivedMessage);
+std::vector<char> intToBytes(unsigned short value);
