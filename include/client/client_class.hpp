@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
 #include <getopt.h>
@@ -31,6 +32,13 @@ protected:
     Direction direction;
     std::ofstream file;
     TransferState current_state;
+    int serverPort;
+    std::string serverIP;
+    int clientPort;
+    std::string clientIP;
+
+
+
 
     int createUdpSocket();
     int transferData();

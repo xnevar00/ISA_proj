@@ -11,15 +11,6 @@
 #include <getopt.h>
 #include <vector>
 
-enum Opcode {
-    RRQ = 1,
-    WRQ = 2,
-    DATA = 3,
-    ACK = 4,
-    ERROR = 5,
-    OACK = 6
-};
-
 class TFTPPacket {
 public:
     int opcode;
@@ -37,7 +28,7 @@ public:
     virtual int parse(std::string receivedMessage) = 0;
     virtual std::string create(Session* session) const = 0;
     virtual int send(int udpSocket, sockaddr_in destination) const = 0;
-    static TFTPPacket *parsePacket(std::string receivedMessage);
+    static TFTPPacket *parsePacket(std::string receivedMessage, std::string srcIP, int srcPort, int dstPort);
     static int sendAck(int block_number, int udp_socket, sockaddr_in addr);
     static int receiveAck(int udp_socket);
     static int receiveData(int udp_socket, int block_number, int block_size, std::ofstream *file, bool *last_packet);

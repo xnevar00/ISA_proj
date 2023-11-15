@@ -170,7 +170,7 @@ void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, soc
 
     if(bytesRead >= 2)
     {
-        TFTPPacket *packet = TFTPPacket::parsePacket(receivedMessage);
+        TFTPPacket *packet = TFTPPacket::parsePacket(receivedMessage, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(session.udpSocket));
         if (packet == nullptr)
         {
             //TODO error message
@@ -305,7 +305,7 @@ int ClientHandler::receiveData()
         return -1;
     }
 
-    TFTPPacket *packet = TFTPPacket::parsePacket(received_message);
+    TFTPPacket *packet = TFTPPacket::parsePacket(received_message, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(session.udpSocket));
     if (packet == nullptr)
     {
         //TODO error packet
@@ -381,6 +381,7 @@ int ClientHandler::handleSendingData()
     {
         downloaded_file.close();
     }
+    return 0;
 }
 
 int ClientHandler::transferFile()

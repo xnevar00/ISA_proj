@@ -2,7 +2,7 @@
 #include <cstring>
 
 
-TFTPPacket* TFTPPacket::parsePacket(std::string receivedMessage)
+TFTPPacket* TFTPPacket::parsePacket(std::string receivedMessage, std::string src_IP, int src_port, int dst_port)
 {
     int opcode = getOpcode(receivedMessage);
     std::cout << "Opcode: " << opcode << std::endl;
@@ -36,6 +36,26 @@ TFTPPacket* TFTPPacket::parsePacket(std::string receivedMessage)
         return nullptr;
     }
     std::cout << "Packet parsed" << packet->opcode << std::endl;
+        switch(opcode){
+        case 1:
+        case 2:
+            printRrqWrqInfo(packet->opcode, src_IP, src_port, packet->filename, packet->mode, "");
+            break;
+        case 3:
+            printDataInfo(src_IP, src_port, dst_port, packet->blknum);
+            break;
+        case 4:
+            printAckInfo(src_IP, src_port, packet->blknum);
+            break;
+        case 5:
+            printErrorInfo(src_IP, src_port, dst_port, 0, "");
+            break;
+        case 6:
+            printOackInfo(src_IP, src_port, "");
+            break;
+        default :
+            break;
+    }
     return packet;
 }
 
@@ -71,7 +91,7 @@ int TFTPPacket::receiveAck(int udp_socket)
         return -1;
     }
 
-    TFTPPacket *packet = TFTPPacket::parsePacket(received_message);
+    TFTPPacket *packet = TFTPPacket::parsePacket(received_message, getIPAddress(addr), ntohs(addr.sin_port), getLocalPort(udp_socket));
     if (packet == nullptr)
     {
         //TODO error packet
@@ -82,6 +102,8 @@ int TFTPPacket::receiveAck(int udp_socket)
         //TODO error packet
         return -1;
     }
+
+    return 0;
 }
 
 int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, std::ofstream *file, bool *last_packet)
@@ -104,13 +126,12 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
         return -1;
     }
 
-    TFTPPacket *packet = TFTPPacket::parsePacket(received_message);
+    TFTPPacket *packet = TFTPPacket::parsePacket(received_message, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(udp_socket));
     if (packet == nullptr)
     {
         //TODO error packet
         return -1;
     }
-
     if (packet->opcode != Opcode::DATA)
     {
         //TODO error packet

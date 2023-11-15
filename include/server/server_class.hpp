@@ -45,6 +45,9 @@ class ClientHandler {
         std::ofstream file;
         std::ifstream downloaded_file;
         TransferState current_state = TransferState::WaitForTransfer;
+        sockaddr_in clientAddr;
+        int clientPort;
+        std::string clientIP;
 
         ClientHandler(){};
         void handleClient(std::string receivedMessage, int bytesRead, sockaddr_in clientAddr, socklen_t clientAddrLen, std::string root_dirpath);

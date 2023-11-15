@@ -98,6 +98,14 @@ int Client::createUdpSocket() {
         return -1;
     }
 
+    struct sockaddr_in localAddress;
+    socklen_t addressLength = sizeof(localAddress);
+    getsockname(udpSocket, (struct sockaddr*)&localAddress, &addressLength);
+
+    //for stderr prints
+    int clientPort = ntohs(localAddress.sin_port);
+    std::string clientIP = getIPAddress(localAddress);
+
     return 0;
 }
 
@@ -116,7 +124,7 @@ int Client::transferData() {
 
     std::string receivedMessage(buffer, bytesRead);
 
-    TFTPPacket *packet = TFTPPacket::parsePacket(receivedMessage);
+    TFTPPacket *packet = TFTPPacket::parsePacket(receivedMessage, getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), getLocalPort(udpSocket));
     if (packet == nullptr)
     {
         //TODO error message
@@ -125,6 +133,7 @@ int Client::transferData() {
     }
     switch(packet->opcode){
         case Opcode::ACK:
+            //printAckInfo(getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), packet->blknum);
             if (direction != Direction::Upload)
             {
                 //TODO error packet
@@ -134,6 +143,7 @@ int Client::transferData() {
             std::cout << "Received ACK packet." << std::endl;
             break;
         case Opcode::OACK:
+            //printOackInfo(getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), "");
             if (block_size == 512 && timeout == -1 && tsize == -1) //no options sent to server but server responded with OACK packet
             {
                 //TODO error packet
@@ -144,6 +154,7 @@ int Client::transferData() {
             updateAcceptedOptions(packet);
             break;
         case Opcode::DATA:
+            //printDataInfo(getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), ntohs(serverAddr.sin_port), packet->blknum);
             if (direction == Direction::Upload)
             {
                 //TODO error packet
@@ -154,6 +165,15 @@ int Client::transferData() {
             //writeData(packet->data);
             file.write(packet->data.data(), packet->data.size());
             break;
+        case Opcode::RRQ:
+            //printRrqWrqInfo(packet->opcode, getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), packet->filename, packet->mode, "");
+            return -1;
+        case Opcode::WRQ:
+            //printRrqWrqInfo(packet->opcode, getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), packet->filename, packet->mode, "");
+            return -1;
+        case Opcode::ERROR:
+            //printErrorInfo(getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), ntohs(serverAddr.sin_port), -1, "CHYBA");
+            return -1;
         default:
             return -1;
             break;
@@ -173,6 +193,7 @@ int Client::handleSendingData()
     ssize_t bytesRead = std::cin.gcount();
 
     TFTPPacket::sendData(udpSocket, serverAddr, block_number, block_size, bytesRead, data, &last_packet);
+    return 0;
 }
 
 int Client::transferFile()

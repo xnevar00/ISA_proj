@@ -4,10 +4,20 @@
 #include <string>
 #include <fstream>
 #include <vector>
+#include <arpa/inet.h>
 
 #define IPADDRLEN 16
 #define MINPORTVALUE 1
 #define MAXPORTVALUE 65535
+
+enum Opcode {
+    RRQ = 1,
+    WRQ = 2,
+    DATA = 3,
+    ACK = 4,
+    ERROR = 5,
+    OACK = 6
+};
 
 enum StatusCode {
     SUCCESS = 0,
@@ -74,3 +84,10 @@ int getPairArgument(int optionIndex, std::string receivedMessage, Session *sessi
 int getOpcode(std::string receivedMessage);
 int setOption(int *option, int *optionIndex, std::string receivedMessage);
 std::vector<char> intToBytes(unsigned short value);
+std::string getIPAddress(const struct sockaddr_in& sockaddr);
+void printAckInfo(std::string src_ip, int src_port, int block_id);
+void printDataInfo(std::string src_ip, int src_port, int dst_port, int block_id);
+void printErrorInfo(std::string src_ip, int src_port, int dst_port, int error_code, std::string error_msg);
+void printOackInfo(std::string src_ip, int src_port, std::string options);
+void printRrqWrqInfo(int opcode, std::string src_ip, int src_port, std::string filepath, std::string mode, std::string options);
+int getLocalPort(int udpSocket);
