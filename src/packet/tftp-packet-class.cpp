@@ -216,6 +216,7 @@ int DATAPacket::send(int udpSocket, sockaddr_in destination) const {
         std::cout << static_cast<int>(byte) << " ";
     }
     message.insert(message.end(), data.begin(), data.end()); //mode
+    std::cout << "cela message length: " << message.size() << std::endl;
 
     if (sendto(udpSocket, message.data(), message.size(), 0, (struct sockaddr*)&destination, sizeof(destination)) == -1) {
         std::cout << "Chyba při odesílání broadcast zprávy: " << strerror(errno) << std::endl;

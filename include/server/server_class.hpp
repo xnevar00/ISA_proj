@@ -43,6 +43,7 @@ class ClientHandler {
     public:
         Session session;
         std::ofstream file;
+        std::ifstream downloaded_file;
         TransferState current_state = TransferState::WaitForTransfer;
 
         ClientHandler(){};
@@ -54,5 +55,8 @@ class ClientHandler {
         int sendAck();
         void writeData(std::vector<char> data);
         int setupFileForUpload();
+        int sendData();
+        int setupFileForDownload();
+        int receiveAck();
 
 };

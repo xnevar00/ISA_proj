@@ -216,6 +216,13 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
             //TODO error packet
             return;
         }
+    } else if (session.direction == Direction::Download)
+    {
+        if (setupFileForDownload() == -1)
+        {
+            //TODO error packet
+            return;
+        }
     }
     if (createUdpSocket() == -1)
     {
@@ -323,6 +330,19 @@ int ClientHandler::receiveData()
     return 0;
 }
 
+int ClientHandler::setupFileForDownload()
+{
+    std::string filename = session.root_dirpath + "/" + session.filename;
+    downloaded_file.open(filename);
+
+    if (!(downloaded_file.is_open())) {
+        // Soubor se nepodařilo otevřít
+        std::cerr << "Failed to open file: " << strerror(errno) << std::endl;
+    }
+
+    return 0;
+}
+
 int ClientHandler::setupFileForUpload()
 {
     std::string filename = session.root_dirpath + "/" + session.filename;
@@ -337,11 +357,6 @@ int ClientHandler::setupFileForUpload()
     std::cout << file.good() << std::endl;
     std::cout << file.bad() << std::endl;
     std::cout << file.fail() << std::endl;
-    /*file.write("test", 4);
-    std::cout << errno  << std::endl;
-    std::cout << file.good() << std::endl;
-    std::cout << file.bad() << std::endl;
-    std::cout << file.fail() << std::endl;*/
     return 0;
 }
 
@@ -366,6 +381,70 @@ int ClientHandler::sendAck()
     }
     std::cout << "Just sent ack packet" << std::endl;
     return 0;
+}
+
+int ClientHandler::sendData()
+{
+    std::vector<char> data;
+    char buffer[session.blksize];
+    downloaded_file.read(buffer, session.blksize);
+    data.insert(data.end(), buffer, buffer + session.blksize);
+    session.block_number++;
+    ssize_t bytesRead = downloaded_file.gcount();
+    
+    if (bytesRead <= 0) {
+        std::cout << "Chyba při čtení ze souboru" << std::endl;
+        return -1;
+    }
+    std::cout << session.blksize << " precteno " << bytesRead << std::endl;
+    data.resize(bytesRead);
+    if (bytesRead < session.blksize)
+    {
+        session.last_packet = true;
+    }
+    DATAPacket response_packet(session.block_number, data);
+    if (response_packet.send(session.udpSocket, session.clientAddr) == -1)
+    {
+        return -1;
+    }
+    std::cout << "Just sent data packet" << std::endl;
+    return 0;
+
+}
+
+int ClientHandler::receiveAck()
+{
+    std::cout << "cekam na ack" << std::endl;
+    char received_data[65507]; // Buffer pro přijatou zprávu, max velikost UDP packetu
+    struct sockaddr_in addr;
+    socklen_t addrLen = sizeof(addr);
+
+    int bytesRead = recvfrom(session.udpSocket, received_data, sizeof(received_data), 0, (struct sockaddr*)&addr, &addrLen);
+    if (bytesRead == StatusCode::CONNECTION_ERROR) {
+        std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
+        return -1;
+    }
+
+    std::string received_message(received_data, bytesRead);
+    if (bytesRead < 4)
+    {
+        //TODO error packet
+        return -1;
+    }
+
+    TFTPPacket *packet = TFTPPacket::parsePacket(received_message);
+    if (packet == nullptr)
+    {
+        //TODO error packet
+        return -1;
+    }
+    if (packet->opcode != Opcode::ACK)
+    {
+        //TODO error packet
+        return -1;
+    }
+    std::cout << "dosel ack" << std::endl;
+    return -1;
 }
 
 int ClientHandler::transferFile()
@@ -394,10 +473,12 @@ int ClientHandler::transferFile()
                 break;
             case TransferState::SendData:
                 //send data
+                sendData();
                 current_state = TransferState::ReceiveAck;
                 break;
             case TransferState::ReceiveAck:
                 //receive ack
+                receiveAck();
                 current_state = TransferState::SendData;
                 break;
             case TransferState::SendError:

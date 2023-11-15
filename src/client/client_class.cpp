@@ -52,9 +52,11 @@ int Client::parse_arguments(int argc, char* argv[])
                 }
                 break;
             case 'f':
+                std::cout << "filepath:" << optarg << std::endl;
                 session.filepath = optarg;
                 break;
             case 't':
+                std::cout << "dest_filepath:" << optarg << std::endl;
                 session.destFilepath = optarg;
                 break;
             case '?':
@@ -186,6 +188,7 @@ int Client::receiveData()
     struct sockaddr_in addr;
     socklen_t addrLen = sizeof(addr);
 
+    std::cout << "cekam na data" << std::endl;
     int bytesRead = recvfrom(session.udpSocket, received_data, sizeof(received_data), 0, (struct sockaddr*)&addr, &addrLen);
     if (bytesRead == -1) {
         std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
@@ -219,8 +222,9 @@ int Client::receiveData()
         return -1;
     }
     std::vector<char> data_vector(received_data, received_data + bytesRead);
-    writeData(data_vector);
-    if ((int)data_vector.size() < block_size)
+    writeData(packet->data);
+    std::cout << "obdrzeno bytu: " << bytesRead << std::endl;
+    if (packet->data.size() < block_size)
     {
         last_packet = true;
         closeFile(&(file));
@@ -360,8 +364,8 @@ void Client::updateAcceptedOptions(TFTPPacket *packet)
 
 int Client::setupFileForDownload()
 {
-    file.open(filepath, std::ios::out | std::ios::app | std::ios::binary);
-    std::cout << "Filepath: " << filepath << std::endl;
+    file.open(session.destFilepath, std::ios::out | std::ios::app | std::ios::binary);
+    std::cout << "Filepath: " << session.destFilepath << std::endl;
 
     if (!(file).is_open()) {
         std::cerr << "Error opening the file" << std::endl;
@@ -399,10 +403,12 @@ int Client::send_broadcast_message() {
     {
         opcode = 2;
         filename = session.destFilepath;
+        std::cout << "je to upload a Filename: " << filename << std::endl;
         direction = Direction::Upload;
     } else {
         opcode = 1;
         filename = session.filepath;
+        std::cout << "je to download a Filename: " << filename << std::endl;
         direction = Direction::Download;
         if (this->setupFileForDownload() == -1)
         {
