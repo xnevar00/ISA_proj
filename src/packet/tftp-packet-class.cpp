@@ -98,7 +98,6 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
     }
 
     std::string received_message(received_data, bytesRead);
-    std::cout << "Prijata zprava:" << received_message << std::endl;
     if (bytesRead < 4)
     {
         //TODO error packet
@@ -127,7 +126,7 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
     if ((unsigned short int)packet->data.size() < block_size)
     {
         *last_packet = true;
-        closeFile(file);
+        file->close();
     }
 
     return 0;
@@ -277,7 +276,6 @@ int RRQWRQPacket::send(int udpSocket, sockaddr_in destination) const {
         message.insert(message.end(), tsize_str.begin(), tsize_str.end());
         message.push_back('\0');
     }
-    std::cout << "Message: " << message.size() << std::endl;
     if (sendto(udpSocket, message.data(), message.size(), 0, (struct sockaddr*)&destination, sizeof(destination)) == -1) {
         std::cout << "Chyba při odesílání broadcast zprávy: " << strerror(errno) << std::endl;
         close(udpSocket);
@@ -302,13 +300,11 @@ int DATAPacket::parse(std::string receivedMessage) {
     opcode = getOpcode(receivedMessage);
     std::string block_number_str = receivedMessage.substr(2, 2);
     blknum = (static_cast<unsigned char>(block_number_str[0]) << 8) | static_cast<unsigned char>(block_number_str[1]);
-    std::cout << "Dosly data s block number: " << blknum << std::endl;
+    std::cout << "Received data with block number: " << blknum << std::endl;
 
     std::string data_string = receivedMessage.substr(4);
-    std::cout << data_string << std::endl;
     std::vector<char> data_char(data_string.begin(), data_string.end());
     data = data_char;
-    std::cout << "DATA: " << data.data() << std::endl;
 
 
     return 0;
@@ -325,9 +321,6 @@ int DATAPacket::send(int udpSocket, sockaddr_in destination) const {
     std::vector<char> block_number = intToBytes(blknum);
     message.insert(message.end(), block_number.begin(), block_number.end()); //blocknumber
     std::cout << "message length: " << message.size() << std::endl;
-    for (char byte : message) {
-        std::cout << static_cast<int>(byte) << " ";
-    }
     message.insert(message.end(), data.begin(), data.end()); //mode
     std::cout << "cela message length: " << message.size() << std::endl;
 

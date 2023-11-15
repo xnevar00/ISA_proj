@@ -72,6 +72,5 @@ int getAnotherStartIndex(int startIndex, std::string receivedMessage);
 std::string getSingleArgument(int startIndex, std::string receivedMessage);
 int getPairArgument(int optionIndex, std::string receivedMessage, Session *session);
 int getOpcode(std::string receivedMessage);
-void closeFile(std::ofstream *file);
 int setOption(int *option, int *optionIndex, std::string receivedMessage);
 std::vector<char> intToBytes(unsigned short value);

@@ -151,7 +151,6 @@ int Client::transferData() {
                 return -1;
             }
             block_number++;
-            std::cout << "Dosly prvni data s blocknumber " << packet->blknum << std::endl;
             //writeData(packet->data);
             file.write(packet->data.data(), packet->data.size());
             break;

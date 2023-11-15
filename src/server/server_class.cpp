@@ -358,9 +358,6 @@ int ClientHandler::setupFileForUpload()
         return -1;
     }
     std::cout << "File opened" << std::endl;
-    std::cout << file.good() << std::endl;
-    std::cout << file.bad() << std::endl;
-    std::cout << file.fail() << std::endl;
     return 0;
 }
 
@@ -380,6 +377,10 @@ int ClientHandler::handleSendingData()
     ssize_t bytesRead = downloaded_file.gcount();
 
     TFTPPacket::sendData(session.udpSocket, session.clientAddr, session.block_number, session.blksize, bytesRead, data, &(session.last_packet));
+    if (session.last_packet == true)
+    {
+        downloaded_file.close();
+    }
 }
 
 int ClientHandler::transferFile()
@@ -422,7 +423,6 @@ int ClientHandler::transferFile()
                 break;
         }
     }
-    closeFile(&(file));
     TFTPPacket::sendAck(session.block_number, session.udpSocket, session.clientAddr);
     session.block_number++;
     std::cout << "Transfer finished" << std::endl;

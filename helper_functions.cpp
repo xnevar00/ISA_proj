@@ -60,15 +60,6 @@ int getOpcode(std::string receivedMessage)
     return opcode;
 }
 
-void closeFile(std::ofstream *file)
-{
-    std::cout << file->good() << std::endl;
-    std::cout << file->bad() << std::endl;
-    std::cout << file->fail() << std::endl;
-    file->close();
-    return;
-}
-
 int setOption(int *option, int *optionIndex, std::string receivedMessage)
 {
     *optionIndex = getAnotherStartIndex(*optionIndex, receivedMessage);
