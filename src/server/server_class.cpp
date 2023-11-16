@@ -161,7 +161,7 @@ void Server::server_loop(int udpSocket) {
 
 
 
-
+//*********************ERRORS HANDLED*****************/
 void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, sockaddr_in set_clientAddr, socklen_t clientAddrLen, std::string set_root_dirpath){
     clientAddr = set_clientAddr;
     root_dirpath = set_root_dirpath;
@@ -171,8 +171,7 @@ void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, soc
         TFTPPacket *packet = TFTPPacket::parsePacket(receivedMessage, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(udpSocket));
         if (packet == nullptr)
         {
-            //TODO error message
-            std::cout << "CHYBA" << std::endl;
+            TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
             return;
         }
         switch (packet->opcode){
@@ -187,20 +186,19 @@ void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, soc
                 handlePacket(packet);
                 break;
             default:
-                //TODO error packet
+                TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
                 break;
         }
-
+        delete packet;
     }
     return;
 }
 
-
+//*********************ERRORS HANDLED*****************/
 void ClientHandler::handlePacket(TFTPPacket *packet)
 {
     if (createUdpSocket() == -1)
     {
-        std::cout << "Chyba při vytvareni socketu: " << strerror(errno) << std::endl;
         return;
     }
 
@@ -218,21 +216,26 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
     {
         if (setupFileForUpload() == -1)
         {
-            //TODO error packet
+            //error already handled
             return;
         }
     } else if (direction == Direction::Download)
     {
         if (setupFileForDownload() == -1)
         {
-            //TODO error packet
+            //error already handled
             return;
         }
     }
     if (block_size_set == true || timeout != -1 || tsize != -1)
     {
         OACKPacket OACK_response_packet(block_number, block_size_set, block_size, timeout, tsize);
-        OACK_response_packet.send(udpSocket, clientAddr);
+        if (OACK_response_packet.send(udpSocket, clientAddr) == -1)
+        {
+            std::cout << "Error sending OACK packet." << std::endl;
+            return;
+        }
+
         if (direction == Direction::Download)
         {
             current_state = TransferState::ReceiveAck;
@@ -251,15 +254,15 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
             current_state = TransferState::SendAck;
         }
     }
-    delete packet;
     transferFile();
 }
 
+//**************ERRORS HANDLED*****************/
 int ClientHandler::createUdpSocket()
 {
     udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
     if (udpSocket == -1) {
-        std::cout << "Chyba při vytváření socketu: " << std::endl;
+        std::cout << "Error creating UDP socket." << std::endl;
         return -1;
     }
 
@@ -270,9 +273,9 @@ int ClientHandler::createUdpSocket()
     serverAddr.sin_port = htons(0);
     serverAddr.sin_addr.s_addr = INADDR_ANY;
 
-    // bind
+
     if (bind(udpSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
-        std::cout << "Chyba při bindování socketu: " << strerror(errno) << std::endl;
+        std::cout << "Error establishing connection." << strerror(errno) << std::endl;
         close(udpSocket);
         return -1;
     }
@@ -413,6 +416,7 @@ int ClientHandler::handleSendingData()
 
 int ClientHandler::transferFile()
 {
+    int ok;
     while(last_packet == false)
     {
         switch(current_state){
@@ -427,24 +431,52 @@ int ClientHandler::transferFile()
                 }
                 break;
             case TransferState::SendAck:
-                TFTPPacket::sendAck(block_number, udpSocket, clientAddr);
+                ok = TFTPPacket::sendAck(block_number, udpSocket, clientAddr);
+                if (ok == -1)
+                {
+                    std::cout << "Error sending ACK packet." << std::endl;
+                    return -1;
+                }
                 block_number++;
                 current_state = TransferState::ReceiveData;
                 break;
             case TransferState::ReceiveData:
                 //receive data
-                TFTPPacket::receiveData(udpSocket, block_number, block_size, &(file), &(last_packet));
+                ok = TFTPPacket::receiveData(udpSocket, block_number, block_size, &(file), &(last_packet));
+                if (ok == -1)
+                {
+                    std::cout << "Illegal TFTP operation." << std::endl;
+                    TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP Operation.");
+                }
                 current_state = TransferState::SendAck;
                 break;
             case TransferState::SendData:
                 //send data
-                handleSendingData();
+                ok = handleSendingData();
+                if (ok == -1)
+                {
+                    std::cout << "Failed to send DATA packet" << std::endl;
+                    return -1;
+                }
                 current_state = TransferState::ReceiveAck;
                 break;
             case TransferState::ReceiveAck:
                 //receive ack
-                TFTPPacket::receiveAck(udpSocket, block_number);
-                current_state = TransferState::SendData;
+                ok = TFTPPacket::receiveAck(udpSocket, block_number);
+                if (ok == -1)
+                {
+                    std::cout << "Illegal TFTP operation" << std::endl;
+                    TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
+                    return -1;
+                } 
+                if (last_packet == true)
+                {
+                    current_state = TransferState::WaitForTransfer;
+                }
+                else
+                {
+                    current_state = TransferState::SendData;
+                }
                 break;
             case TransferState::SendError:
                 //send error
@@ -453,11 +485,22 @@ int ClientHandler::transferFile()
     }
     if (direction == Direction::Upload)
     {
-        TFTPPacket::sendAck(block_number, udpSocket, clientAddr);
+        ok = TFTPPacket::sendAck(block_number, udpSocket, clientAddr);
+        if (ok == -1)
+        {
+            std::cout << "Error sending ACK packet." << std::endl;
+            return -1;
+        }
         block_number++;
     } else 
     {        
-        TFTPPacket::receiveAck(udpSocket, block_number);
+        ok = TFTPPacket::receiveAck(udpSocket, block_number);
+        if (ok == -1)
+        {
+            std::cout << "Illegal TFTP operation" << std::endl;
+            TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
+            return -1;
+        } 
     }
     std::cout << "Transfer finished" << std::endl;
     return 0;
