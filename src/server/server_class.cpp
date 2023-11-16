@@ -2,6 +2,8 @@
 #include "../../include/server/server_class.hpp"
 #include <arpa/inet.h>  // pro inet_ntoa
 
+namespace fs = std::filesystem;
+
 Server* Server::server_ = nullptr;;
 
 Server *Server::getInstance()
@@ -160,17 +162,13 @@ void Server::server_loop(int udpSocket) {
 
 
 
-
-
-
-
-void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, sockaddr_in clientAddr, socklen_t clientAddrLen, std::string root_dirpath){
-    session.clientAddr = clientAddr;
-    session.root_dirpath = root_dirpath;
+void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, sockaddr_in set_clientAddr, socklen_t clientAddrLen, std::string set_root_dirpath){
+    clientAddr = set_clientAddr;
+    root_dirpath = set_root_dirpath;
 
     if(bytesRead >= 2)
     {
-        TFTPPacket *packet = TFTPPacket::parsePacket(receivedMessage, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(session.udpSocket));
+        TFTPPacket *packet = TFTPPacket::parsePacket(receivedMessage, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(udpSocket));
         if (packet == nullptr)
         {
             //TODO error message
@@ -179,12 +177,12 @@ void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, soc
         }
         switch (packet->opcode){
             case Opcode::RRQ:
-                session.direction = Direction::Download;
+                direction = Direction::Download;
                 std::cout << "RRQ packet" << std::endl;
                 handlePacket(packet);
                 break;
             case Opcode::WRQ:
-                session.direction = Direction::Upload;
+                direction = Direction::Upload;
                 std::cout << "WRQ packet" << std::endl;
                 handlePacket(packet);
                 break;
@@ -200,23 +198,30 @@ void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, soc
 
 void ClientHandler::handlePacket(TFTPPacket *packet)
 {
-    if(packet->blksize != -1)   //if not set in rrq/wrq, remain default int session (512)
+    if (createUdpSocket() == -1)
     {
-        session.blksize = packet->blksize;
-        session.blksize_set = true;
+        std::cout << "Chyba při vytvareni socketu: " << strerror(errno) << std::endl;
+        return;
     }
-    session.filename = packet->filename;
-    session.timeout = packet->timeout;
-    session.tsize = packet->tsize;
+
+    if(packet->blksize != -1)   //if not set in rrq/wrq, remain default (512)
+    {
+        block_size = packet->blksize;
+        block_size_set = true;
+    }
+    filename = packet->filename;
+    timeout = packet->timeout;
+    tsize = packet->tsize;
+    
     std::cout << "Handling packet" << std::endl;
-    if (session.direction == Direction::Upload)
+    if (direction == Direction::Upload)
     {
         if (setupFileForUpload() == -1)
         {
             //TODO error packet
             return;
         }
-    } else if (session.direction == Direction::Download)
+    } else if (direction == Direction::Download)
     {
         if (setupFileForDownload() == -1)
         {
@@ -224,22 +229,24 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
             return;
         }
     }
-    if (createUdpSocket() == -1)
+    if (block_size_set == true || timeout != -1 || tsize != -1)
     {
-        std::cout << "Chyba při vytvareni socketu: " << strerror(errno) << std::endl;
-        return;
-    }
-    if (session.blksize_set == true || session.timeout != -1 || session.tsize != -1)
-    {
-        OACKPacket OACK_response_packet(session.block_number, session.blksize_set, session.blksize, session.timeout, session.tsize);
-        OACK_response_packet.send(session.udpSocket, session.clientAddr);
-        std::cout << "Just sent OACK with block number: " << OACK_response_packet.blknum << std::endl;
+        OACKPacket OACK_response_packet(block_number, block_size_set, block_size, timeout, tsize);
+        OACK_response_packet.send(udpSocket, clientAddr);
+        if (direction == Direction::Download)
+        {
+            current_state = TransferState::ReceiveAck;
+        } else if (direction == Direction::Upload)
+        {
+            block_number++;
+            current_state = TransferState::ReceiveData;
+        }
     } else
     {
-        if (session.direction == Direction::Download)
+        if (direction == Direction::Download)
         {
             current_state = TransferState::SendData;
-        } else if (session.direction == Direction::Upload)
+        } else if (direction == Direction::Upload)
         {
             current_state = TransferState::SendAck;
         }
@@ -250,13 +257,11 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
 
 int ClientHandler::createUdpSocket()
 {
-    int udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
+    udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
     if (udpSocket == -1) {
         std::cout << "Chyba při vytváření socketu: " << std::endl;
         return -1;
     }
-
-    session.udpSocket = udpSocket;
 
     struct sockaddr_in serverAddr;
     std::memset(&serverAddr, 0, sizeof(serverAddr));
@@ -266,7 +271,7 @@ int ClientHandler::createUdpSocket()
     serverAddr.sin_addr.s_addr = INADDR_ANY;
 
     // bind
-    if (bind(session.udpSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+    if (bind(udpSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
         std::cout << "Chyba při bindování socketu: " << strerror(errno) << std::endl;
         close(udpSocket);
         return -1;
@@ -291,7 +296,7 @@ int ClientHandler::receiveData()
     socklen_t clientAddrLen = sizeof(clientAddr);
 
     std::cout << "cekam na data" << std::endl;
-    int bytesRead = recvfrom(session.udpSocket, received_data, sizeof(received_data), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
+    int bytesRead = recvfrom(udpSocket, received_data, sizeof(received_data), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
     if (bytesRead == StatusCode::CONNECTION_ERROR) {
         std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
         return -1;
@@ -305,7 +310,7 @@ int ClientHandler::receiveData()
         return -1;
     }
 
-    TFTPPacket *packet = TFTPPacket::parsePacket(received_message, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(session.udpSocket));
+    TFTPPacket *packet = TFTPPacket::parsePacket(received_message, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(udpSocket));
     if (packet == nullptr)
     {
         //TODO error packet
@@ -317,18 +322,19 @@ int ClientHandler::receiveData()
         //TODO error packet
         return -1;
     }
-    if (packet->blknum != session.block_number)
+    if (packet->blknum != block_number)
     {
         //TODO osetrit
         std::cout << "spatny block number!" << std::endl;
         return -1;
     }
-    //std::vector<char> data_vector(received_data, received_data + bytesRead);
-    writeData(packet->data);
-    if ((unsigned short int)packet->data.size() < session.blksize)
+    if (writeData(packet->data) == -1)
     {
-        session.last_packet = true;
-        //closeFile(&(session.file));
+        return -1;
+    }
+    if ((unsigned short int)packet->data.size() < block_size)
+    {
+        last_packet = true;
     }
 
     return 0;
@@ -336,12 +342,13 @@ int ClientHandler::receiveData()
 
 int ClientHandler::setupFileForDownload()
 {
-    std::string filename = session.root_dirpath + "/" + session.filename;
-    downloaded_file.open(filename);
+    std::cout << filename << std::endl;
+    std::string filename_path = root_dirpath + "/" + filename;
+    downloaded_file.open(filename_path, std::ios::binary | std::ios::in);
 
-    if (!(downloaded_file.is_open())) {
-        // Soubor se nepodařilo otevřít
-        std::cerr << "Failed to open file: " << strerror(errno) << std::endl;
+    if (!(downloaded_file).is_open()) {
+        TFTPPacket::sendError(udpSocket, clientAddr, 2, "Access violation.");
+        return -1;
     }
 
     return 0;
@@ -349,35 +356,48 @@ int ClientHandler::setupFileForDownload()
 
 int ClientHandler::setupFileForUpload()
 {
-    std::string filename = session.root_dirpath + "/" + session.filename;
-    file.open(filename, std::ios::binary | std::ios::out);
-    std::cout << "Filepath: " << filename << std::endl;
-
-    if (!(file).is_open()) {
-        std::cerr << "Error opening the file" << std::endl;
+    std::string filename_path = root_dirpath + "/" + filename;
+    if(fs::exists(filename_path))
+    {
+        std::cout << "File already exists." << std::endl;
+        TFTPPacket::sendError(udpSocket, clientAddr, 6, "File already exists.");
         return -1;
     }
-    std::cout << "File opened" << std::endl;
+         
+    file.open(filename_path, std::ios::binary | std::ios::out);
+    std::cout << "Filepath: " << filename_path << std::endl;
+
+    if (!(file).is_open()) {
+        TFTPPacket::sendError(udpSocket, clientAddr, 2, "Access violation.");
+        return -1;
+    }
+    std::cout << "File opened." << std::endl;
     return 0;
 }
 
-void ClientHandler::writeData(std::vector<char> data)
+int ClientHandler::writeData(std::vector<char> data)
 {
     file.write(data.data(), data.size());
-    return;
+    if (file.fail())
+    {
+        std::cerr << "Error writing to file maybe because of not enough diskspace." << std::endl;
+        TFTPPacket::sendError(udpSocket, clientAddr, 3, "Not enough diskspace.");
+        return -1;
+    }
+    return 0;
 }
 
 int ClientHandler::handleSendingData()
 {
     std::vector<char> data;
-    char buffer[session.blksize];
-    downloaded_file.read(buffer, session.blksize);
-    data.insert(data.end(), buffer, buffer + session.blksize);
-    session.block_number++;
+    char buffer[block_size];
+    downloaded_file.read(buffer, block_size);
+    data.insert(data.end(), buffer, buffer + block_size);
+    block_number++;
     ssize_t bytesRead = downloaded_file.gcount();
 
-    TFTPPacket::sendData(session.udpSocket, session.clientAddr, session.block_number, session.blksize, bytesRead, data, &(session.last_packet));
-    if (session.last_packet == true)
+    TFTPPacket::sendData(udpSocket, clientAddr, block_number, block_size, bytesRead, data, &(last_packet));
+    if (last_packet == true)
     {
         downloaded_file.close();
     }
@@ -386,27 +406,27 @@ int ClientHandler::handleSendingData()
 
 int ClientHandler::transferFile()
 {
-    while(session.last_packet == false)
+    while(last_packet == false)
     {
         switch(current_state){
             case TransferState::WaitForTransfer:
-                if(session.direction == Direction::Download)
+                if(direction == Direction::Download)
                 {
                     current_state = TransferState::SendData;
-                } else if (session.direction == Direction::Upload)
+                } else if (direction == Direction::Upload)
                 {
-                    session.block_number = 1;
+                    block_number = 1;
                     current_state = TransferState::ReceiveData;
                 }
                 break;
             case TransferState::SendAck:
-                TFTPPacket::sendAck(session.block_number, session.udpSocket, session.clientAddr);
-                session.block_number++;
+                TFTPPacket::sendAck(block_number, udpSocket, clientAddr);
+                block_number++;
                 current_state = TransferState::ReceiveData;
                 break;
             case TransferState::ReceiveData:
                 //receive data
-                TFTPPacket::receiveData(session.udpSocket, session.block_number, session.blksize, &(file), &(session.last_packet));
+                TFTPPacket::receiveData(udpSocket, block_number, block_size, &(file), &(last_packet));
                 current_state = TransferState::SendAck;
                 break;
             case TransferState::SendData:
@@ -416,7 +436,7 @@ int ClientHandler::transferFile()
                 break;
             case TransferState::ReceiveAck:
                 //receive ack
-                TFTPPacket::receiveAck(session.udpSocket);
+                TFTPPacket::receiveAck(udpSocket, block_number);
                 current_state = TransferState::SendData;
                 break;
             case TransferState::SendError:
@@ -424,8 +444,14 @@ int ClientHandler::transferFile()
                 break;
         }
     }
-    TFTPPacket::sendAck(session.block_number, session.udpSocket, session.clientAddr);
-    session.block_number++;
+    if (direction == Direction::Upload)
+    {
+        TFTPPacket::sendAck(block_number, udpSocket, clientAddr);
+        block_number++;
+    } else 
+    {        
+        TFTPPacket::receiveAck(udpSocket, block_number);
+    }
     std::cout << "Transfer finished" << std::endl;
     return 0;
 }

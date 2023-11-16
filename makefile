@@ -1,5 +1,5 @@
 CXX = g++    # C++ kompilátor
-CXXFLAGS = -std=c++14 -Wall -Wextra -Iinclude  # Přepínače kompilátoru
+CXXFLAGS = -std=c++17 -Wall -Wextra -Iinclude  # Přepínače kompilátoru
 LDFLAGS =    # Přepínače pro linkování
 SRC_CLIENT = src/client/tftp-client.cpp src/client/client_class.cpp  # Přidáme client_class.cpp
 SRC_SERVER = src/server/tftp-server.cpp src/server/server_class.cpp  # Přidáme server_class.cpp

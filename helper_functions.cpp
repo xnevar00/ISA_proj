@@ -50,13 +50,8 @@ std::string getSingleArgument(int startIndex, std::string receivedMessage)
 int getOpcode(std::string receivedMessage)
 {
     int opcode = -1;
-    if(receivedMessage[0] >= '0' && receivedMessage[0] <= '9' && receivedMessage[1] >= '0' && receivedMessage[1] <= '9')
-    {
-        std::string opcodeStr = receivedMessage.substr(0, 2);
-        opcode = std::stoi(opcodeStr);
-    } else{
-        return -1;
-    }
+    std::string opcode_str = receivedMessage.substr(0, 2);
+    opcode = (static_cast<unsigned char>(opcode_str[0]) << 8) | static_cast<unsigned char>(opcode_str[1]);
     return opcode;
 }
 
@@ -102,7 +97,7 @@ void printDataInfo(std::string src_ip, int src_port, int dst_port, int block_id)
     std::cerr << "DATA " << src_ip << ":" << src_port << ":" << dst_port << " " << block_id << std::endl;
 }
 
-void printErrorInfo(std::string src_ip, int src_port, int dst_port, int error_code, std::string error_msg) {
+void printErrorInfo(std::string src_ip, int src_port, int dst_port, unsigned short error_code, std::string error_msg) {
     std::cerr << "ERROR " << src_ip << ":" << src_port << ":" << dst_port << " " << error_code << " \"" << error_msg  << "\""<< std::endl;
 }
 

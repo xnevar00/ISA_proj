@@ -133,7 +133,6 @@ int Client::transferData() {
     }
     switch(packet->opcode){
         case Opcode::ACK:
-            //printAckInfo(getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), packet->blknum);
             if (direction != Direction::Upload)
             {
                 //TODO error packet
@@ -143,8 +142,7 @@ int Client::transferData() {
             std::cout << "Received ACK packet." << std::endl;
             break;
         case Opcode::OACK:
-            //printOackInfo(getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), "");
-            if (block_size == 512 && timeout == -1 && tsize == -1) //no options sent to server but server responded with OACK packet
+            if (block_size == 513 && timeout == -1 && tsize == -1) //no options sent to server but server responded with OACK packet
             {
                 //TODO error packet
                 std::cout << "Received OACK packet when expecting DATA or ACK packet." << std::endl;
@@ -154,7 +152,6 @@ int Client::transferData() {
             updateAcceptedOptions(packet);
             break;
         case Opcode::DATA:
-            //printDataInfo(getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), ntohs(serverAddr.sin_port), packet->blknum);
             if (direction == Direction::Upload)
             {
                 //TODO error packet
@@ -162,17 +159,13 @@ int Client::transferData() {
                 return -1;
             }
             block_number++;
-            //writeData(packet->data);
             file.write(packet->data.data(), packet->data.size());
             break;
         case Opcode::RRQ:
-            //printRrqWrqInfo(packet->opcode, getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), packet->filename, packet->mode, "");
             return -1;
         case Opcode::WRQ:
-            //printRrqWrqInfo(packet->opcode, getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), packet->filename, packet->mode, "");
             return -1;
         case Opcode::ERROR:
-            //printErrorInfo(getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), ntohs(serverAddr.sin_port), -1, "CHYBA");
             return -1;
         default:
             return -1;
@@ -224,7 +217,7 @@ int Client::transferFile()
                 current_state = TransferState::ReceiveAck;
                 break;
             case TransferState::ReceiveAck:
-                TFTPPacket::receiveAck(udpSocket);
+                TFTPPacket::receiveAck(udpSocket, block_number);
                 current_state = TransferState::SendData;
                 break;
             case TransferState::SendError:
@@ -234,7 +227,7 @@ int Client::transferFile()
     }
     if (direction == Direction::Upload)
     {
-        TFTPPacket::receiveAck(udpSocket);
+        TFTPPacket::receiveAck(udpSocket, block_number);
     } else 
     {
         TFTPPacket::sendAck(block_number, udpSocket, serverAddr);
@@ -316,7 +309,7 @@ int Client::sendBroadcastMessage() {
         }
     }
 
-    RRQWRQPacket packet(opcode, filename, "octet", timeout, -1, tsize); //-1 because of default blocksize
+    RRQWRQPacket packet(opcode, filename, "octet", timeout, block_size, tsize); //-1 because of default blocksize
     packet.send(udpSocket, addr);
 
     return 0;
