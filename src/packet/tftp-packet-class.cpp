@@ -91,17 +91,14 @@ int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number)
     TFTPPacket *packet = TFTPPacket::parsePacket(received_message, getIPAddress(addr), ntohs(addr.sin_port), getLocalPort(udp_socket));
     if (packet == nullptr)
     {
-        //TODO error packet
         return -1;
     }
     if (packet->opcode != Opcode::ACK)
     {
-        //TODO error packet
         return -1;
     }
     if (packet->blknum != block_number)
     {
-        //TODO osetrit
         std::cout << "Wrong block number!" << std::endl;
         return -1;
     }
@@ -159,7 +156,7 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
 int TFTPPacket::sendData(int udp_socket, sockaddr_in addr, int block_number, int block_size, int bytes_read, std::vector<char> data, bool *last_packet)
 {
     if (bytes_read < 0) {
-        std::cout << "Error reading from stdin!" << std::endl;
+        std::cout << "Error reading from stdin." << std::endl;
         return -1;
     }
 
@@ -171,6 +168,7 @@ int TFTPPacket::sendData(int udp_socket, sockaddr_in addr, int block_number, int
     DATAPacket response_packet(block_number, data);
     if (response_packet.send(udp_socket, addr) == -1)
     {
+        std::cout << "Error sending DATA packet." << std::endl;
         return -1;
     }
     return 0;

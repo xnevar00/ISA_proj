@@ -344,8 +344,15 @@ int ClientHandler::setupFileForDownload()
 {
     std::cout << filename << std::endl;
     std::string filename_path = root_dirpath + "/" + filename;
-    downloaded_file.open(filename_path, std::ios::binary | std::ios::in);
 
+    if(!(fs::exists(filename_path)))
+    {
+        std::cout << "File not found." << std::endl;
+        TFTPPacket::sendError(udpSocket, clientAddr, 6, "File not found.");
+        return -1;
+    }
+
+    downloaded_file.open(filename_path, std::ios::binary | std::ios::in);
     if (!(downloaded_file).is_open()) {
         TFTPPacket::sendError(udpSocket, clientAddr, 2, "Access violation.");
         return -1;

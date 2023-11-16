@@ -20,12 +20,12 @@ int main(int argc, char* argv[]) {
     Client *client = Client::getInstance();
 
     int ok = client->parse_arguments(argc, argv);
-    if (ok != StatusCode::SUCCESS)
+    if (ok == -1)
     {
-        std::cout << "Chyba v zadani argumentu" << std::endl;
-        return StatusCode::INVALID_ARGUMENTS;
+        std::cout << "Invalid format of arguments." << std::endl;
+        return -1;
     } else {
-        std::cout << "Všechno je v pořádku" << std::endl;
+        std::cout << "Arguments ok." << std::endl;
     }
     ok = client->communicate();
     return ok;
