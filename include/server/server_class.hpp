@@ -60,9 +60,9 @@ class ClientHandler {
         sockaddr_in clientAddr;
         int direction;
         unsigned short block_number;
-        int tsize;
-        int timeout;
-        int block_size;
+        int64_t tsize;
+        int64_t timeout;
+        int64_t block_size;
         bool block_size_set;
         bool last_packet;
         std::string root_dirpath;

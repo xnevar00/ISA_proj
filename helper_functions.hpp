@@ -10,6 +10,9 @@
 #define IPADDRLEN 16
 #define MINPORTVALUE 1
 #define MAXPORTVALUE 65535
+#define MAXTSIZEVALUE 4294967295
+#define MAXBLKSIZEVALUE 65464
+#define MAXTIMEOUTVALUE 255
 
 enum Opcode {
     RRQ = 1,
@@ -47,7 +50,7 @@ std::string getArgument(int startIndex, std::string receivedMessage);
 int getAnotherStartIndex(int startIndex, std::string receivedMessage);
 std::string getSingleArgument(int startIndex, std::string receivedMessage); 
 int getOpcode(std::string receivedMessage);
-int setOption(int *option, int *optionIndex, std::string receivedMessage);
+int setOption(int64_t *option, int *optionIndex, std::string receivedMessage);
 std::vector<char> intToBytes(unsigned short value);
 std::string getIPAddress(const struct sockaddr_in& sockaddr);
 void printAckInfo(std::string src_ip, int src_port, int block_id);

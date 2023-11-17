@@ -185,7 +185,6 @@ void Server::server_loop(int udpSocket) {
         auto future = std::async(std::launch::async, &ClientHandler::handleClient, clientHandlerObj, receivedMessage, bytesRead, clientAddr, root_dirpath);
         futures_vector.push_back(std::move(future));
     }
-    close(udpSocket);
 }
 
 
@@ -207,15 +206,19 @@ void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, soc
     root_dirpath = set_root_dirpath;
     clientPort = getPort(clientAddr);
 
+    if (createUdpSocket() == -1)
+    {
+        return;
+    }
+
     if(bytesRead >= 2)
     {
-        TFTPPacket *packet = TFTPPacket::parsePacket(receivedMessage, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(udpSocket));
-        if (packet == nullptr)
+        auto [packet, ok] = TFTPPacket::parsePacket(receivedMessage, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(udpSocket));
+        if (ok == -1)
         {
             TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
             return;
-        }
-        if (packet->blksize < 8)
+        } else if (ok == -2)
         {
             TFTPPacket::sendError(udpSocket, clientAddr, 8, "Illegal options.");
             return;
@@ -236,18 +239,17 @@ void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, soc
                 break;
         }
         delete packet;
+    } else
+    {
+        TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
     }
+    close(udpSocket);
     return;
 }
 
 //*********************ERRORS HANDLED*****************/
 void ClientHandler::handlePacket(TFTPPacket *packet)
 {
-    if (createUdpSocket() == -1)
-    {
-        return;
-    }
-
     if(packet->blksize != -1)   //if not set in rrq/wrq, remain default (512)
     {
         block_size = packet->blksize;
@@ -257,6 +259,11 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
     timeout = packet->timeout;
     tsize = packet->tsize;
     mode = packet->mode;
+    if ((packet->timeout > MAXTIMEOUTVALUE) || (packet->blksize < 8 && block_size_set == true) || (packet->blksize > MAXBLKSIZEVALUE) || (packet->tsize > MAXTSIZEVALUE))
+    {
+        TFTPPacket::sendError(udpSocket, clientAddr, 8, "Illegal options.");
+        return;
+    }
     
     std::cout << "Handling packet" << std::endl;
     if (direction == Direction::Upload)
@@ -302,7 +309,6 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
         }
     }
     transferFile();
-    close(udpSocket);
 }
 
 //**************ERRORS HANDLED*****************/
@@ -366,8 +372,8 @@ int ClientHandler::receiveData()
         return -1;
     }
 
-    TFTPPacket *packet = TFTPPacket::parsePacket(received_message, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(udpSocket));
-    if (packet == nullptr)
+    auto [packet, ok] = TFTPPacket::parsePacket(received_message, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(udpSocket));
+    if (ok != 0)
     {
         TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
         return -1;
@@ -420,6 +426,12 @@ int ClientHandler::setupFileForDownload()
 
 int ClientHandler::setupFileForUpload()
 {
+    if (filename.find('/') != std::string::npos) {
+        std::cout << "Acces violation." << std::endl;
+        TFTPPacket::sendError(udpSocket, clientAddr, 2, "Access violation.");
+        return -1;
+    }
+
     std::string filename_path = root_dirpath + "/" + filename;
     if(fs::exists(filename_path))
     {

@@ -55,7 +55,7 @@ int getOpcode(std::string receivedMessage)
     return opcode;
 }
 
-int setOption(int *option, int *optionIndex, std::string receivedMessage)
+int setOption(int64_t *option, int *optionIndex, std::string receivedMessage)
 {
     *optionIndex = getAnotherStartIndex(*optionIndex, receivedMessage);
     std::string option_str = getSingleArgument(*optionIndex, receivedMessage);
@@ -64,7 +64,7 @@ int setOption(int *option, int *optionIndex, std::string receivedMessage)
         return -1;
     } else
     {
-        *option = std::stoi(option_str);
+        *option = std::stoll(option_str);;
         return 0;
     }
 }

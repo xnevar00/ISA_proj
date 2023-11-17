@@ -2,7 +2,7 @@
 #include <cstring>
 
 
-TFTPPacket* TFTPPacket::parsePacket(std::string receivedMessage, std::string src_IP, int src_port, int dst_port)
+std::pair<TFTPPacket *, int> TFTPPacket::parsePacket(std::string receivedMessage, std::string src_IP, int src_port, int dst_port)
 {
     int opcode = getOpcode(receivedMessage);
     TFTPPacket* packet;
@@ -26,13 +26,20 @@ TFTPPacket* TFTPPacket::parsePacket(std::string receivedMessage, std::string src
             packet = new OACKPacket();
             break;
         default :
-            return nullptr;
+            return {nullptr, -1};
             break;
     }
-    if(packet->parse(receivedMessage) == -1)
+
+    int ok = packet->parse(receivedMessage);
+    if(ok == -1)
     {
         std::cout << "chyba parsovani packetu" << std::endl;
-        return nullptr;
+        return {nullptr, -1};
+    }
+    if (ok == -2)
+    {
+        std::cout << "chyba parsovani packetu" << std::endl;
+        return {nullptr, -2};
     }
         switch(opcode){
         case 1:
@@ -54,7 +61,7 @@ TFTPPacket* TFTPPacket::parsePacket(std::string receivedMessage, std::string src
         default :
             break;
     }
-    return packet;
+    return {packet, 0};
 }
 
 int TFTPPacket::sendAck(int block_number, int udp_socket, sockaddr_in addr)
@@ -93,12 +100,12 @@ int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number, int clie
         return -1;
     }
 
-    TFTPPacket *packet = TFTPPacket::parsePacket(received_message, getIPAddress(addr), ntohs(addr.sin_port), getLocalPort(udp_socket));
-    if (packet == nullptr)
+    auto [packet, ok] = TFTPPacket::parsePacket(received_message, getIPAddress(addr), ntohs(addr.sin_port), getLocalPort(udp_socket));
+    if (packet->opcode != Opcode::ACK)
     {
         return -1;
     }
-    if (packet->opcode != Opcode::ACK)
+    if (ok != 0)
     {
         return -1;
     }
@@ -135,8 +142,13 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
         return -1;
     }
 
-    TFTPPacket *packet = TFTPPacket::parsePacket(received_message, getIPAddress(tmpClientAddr), ntohs(tmpClientAddr.sin_port), getLocalPort(udp_socket));
-    if (packet == nullptr)
+    auto [packet, ok] = TFTPPacket::parsePacket(received_message, getIPAddress(tmpClientAddr), ntohs(tmpClientAddr.sin_port), getLocalPort(udp_socket));
+    if (packet->opcode == Opcode::ERROR)
+    {
+        //just return, no need to respond
+        return -1;
+    }
+    if (ok != 0)
     {
         TFTPPacket::sendError(udp_socket, tmpClientAddr, 4, "Illegal TFTP operation.");
         return -1;
@@ -146,14 +158,8 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
         TFTPPacket::sendError(udp_socket, tmpClientAddr, 4, "Illegal TFTP operation.");
         return -1;
     }
-    if (packet->opcode == Opcode::ERROR)
-    {
-        //just return, no need to respond
-        return -1;
-    }
     if (packet->blknum != block_number)
     {
-        //TODO osetrit
         std::cout << "Wrong block number!" << std::endl;
         return -1;
     }
@@ -266,7 +272,7 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
     if (filename == "")
     {
         //TODO error packet
-        std::cout << "CHYBA" << std::endl;
+        std::cout << "CHYBA1" << std::endl;
         return -1;
     }
     int modeIndex = getAnotherStartIndex(filenameIndex, receivedMessage);
@@ -284,50 +290,72 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
     while(optionIndex != -1 && optionIndex != (int)receivedMessage.length())
     {
         option = getSingleArgument(optionIndex, receivedMessage);
+        if (option == "")
+        {
+            std::cout << "CHYBA6" << std::endl;
+            return -2;
+        }
         if (optionIndex == -1)
         {
             //TODO error packet
-            std::cout << "CHYBA" << std::endl;
-            return -1;
+            std::cout << "CHYBA3" << std::endl;
+            return -2;
         } else if (option == "blksize")
         {
             if (blksize == -1)
             {
-                setOption(&blksize, &optionIndex, receivedMessage);
+                if (setOption(&blksize, &optionIndex, receivedMessage) == -1)
+                {
+                    std::cout << "CHYBA6" << std::endl;
+                    return -2;
+                }
             } else {
                 //TODO error packet
-                std::cout << "CHYBA" << std::endl;
-                return -1;
+                std::cout << "CHYBA4" << std::endl;
+                return -2;
             }
         } else if (option == "timeout")
         {
             if (timeout == -1)
             {
-                setOption(&timeout, &optionIndex, receivedMessage);
+                if (setOption(&timeout, &optionIndex, receivedMessage) == -1)
+                {
+                    std::cout << "CHYBA6" << std::endl;
+                    return -2;
+                }
             } else {
                 //TODO error packet
-                std::cout << "CHYBA" << std::endl;
-                return -1;
+                std::cout << "CHYBA5" << std::endl;
+                return -2;
             }
         } else if (option == "tsize")
         {
             if (tsize == -1)
             {
-                setOption(&tsize, &optionIndex, receivedMessage);
+                if(setOption(&tsize, &optionIndex, receivedMessage) == -1)
+                {
+                    std::cout << "CHYBA6" << std::endl;
+                    return -2;
+                }
             } else {
                 //TODO error packet
-                std::cout << "CHYBA" << std::endl;
-                return -1;
+                std::cout << "CHYBA6" << std::endl;
+                return -2;
             }
         } else {
-            //TODO error packet
-            std::cout << "CHYBA" << std::endl;
-            return -1;
+            //skipping unknown option
+            optionIndex = getAnotherStartIndex(optionIndex, receivedMessage);
+            if (optionIndex == -1)
+            {
+                std::cout << "CHYBA7" << std::endl;
+                return -2;
+            }
+            std::cout << "ignoring this option" << std::endl;
         }
         optionIndex = getAnotherStartIndex(optionIndex, receivedMessage);
 
     }
-    std::cout << "RRW packet parsed." << std::endl;
+    std::cout << "RRQ/WRQ packet parsed." << std::endl;
     return 0;
 }
 
@@ -616,8 +644,6 @@ int ERRORPacket::send(int udpSocket, sockaddr_in destination) const {
     std::vector<char> message;
     std::vector<char> opcode = intToBytes(this->opcode);
     message.insert(message.end(), opcode.begin(), opcode.end()); //opcode
-    //message.push_back('0');
-    //message.push_back(std::to_string(opcode)[0]);
     std::vector<char> error_code = intToBytes(this->error_code);
     message.insert(message.end(), error_code.begin(), error_code.end()); //error code
     message.insert(message.end(), this->error_message.begin(), this->error_message.end());
@@ -627,6 +653,6 @@ int ERRORPacket::send(int udpSocket, sockaddr_in destination) const {
         close(udpSocket);
         return -1;
     }
-    std::cout << "ERROR packet sent." << std::endl;
+    std::cout << "ERROR packet sent: " << this->error_code << std::endl;
     return 0;
 }

@@ -133,8 +133,8 @@ int Client::transferData() {
 
     std::string receivedMessage(buffer, bytesRead);
 
-    TFTPPacket *packet = TFTPPacket::parsePacket(receivedMessage, getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), getLocalPort(udpSocket));
-    if (packet == nullptr)
+    auto [packet, ok] = TFTPPacket::parsePacket(receivedMessage, getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), getLocalPort(udpSocket));
+    if (ok != 0)
     {
         std::cout << "Illegal TFTP operation." << std::endl;
         TFTPPacket::sendError(udpSocket, serverAddr, 4, "Illegal TFTP operation.");
