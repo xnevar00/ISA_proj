@@ -26,9 +26,9 @@ protected:
     sockaddr_in serverAddr;
     bool last_packet;
     unsigned short int block_number;
-    int block_size = 512;
-    int timeout = -1;
-    int tsize = -1;
+    int block_size;
+    int timeout;
+    int tsize;
     Direction direction;
     std::ofstream file;
     TransferState current_state;
@@ -38,6 +38,8 @@ protected:
     std::string mode;
     bool r_flag;
     std::string overflow;
+    int attempts_to_resend;
+    std::vector<char> last_data;
 
 
 

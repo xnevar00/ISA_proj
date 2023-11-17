@@ -64,10 +64,10 @@ std::pair<TFTPPacket *, int> TFTPPacket::parsePacket(std::string receivedMessage
     return {packet, 0};
 }
 
-int TFTPPacket::sendAck(int block_number, int udp_socket, sockaddr_in addr)
+int TFTPPacket::sendAck(int block_number, int udp_socket, sockaddr_in addr, std::vector<char> *last_data)
 {
     ACKPacket response_packet(block_number);
-    if (response_packet.send(udp_socket, addr) == -1)
+    if (response_packet.send(udp_socket, addr, last_data) == -1)
     {
         return -1;
     }
@@ -83,8 +83,13 @@ int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number, int clie
 
     int bytesRead = recvfrom(udp_socket, received_data, sizeof(received_data), 0, (struct sockaddr*)&addr, &addrLen);
     if (bytesRead == -1) {
-        std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
-        return -1;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            std::cout << "Timeout" << std::endl;
+            return -3;
+        } else {
+            std::cerr << "Error in recvfrom: " << strerror(errno) << std::endl;
+            close(udp_socket);
+        }
     }
     if (getPort(addr) != client_port)
     {
@@ -126,8 +131,12 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
     std::cout << "Waiting for DATA packet..." << std::endl;
     int bytesRead = recvfrom(udp_socket, received_data, sizeof(received_data), 0, (struct sockaddr*)&tmpClientAddr, &tmpClientAddrLen);
     if (bytesRead == -1) {
-        std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
-        return -1;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return -3;
+        } else {
+            std::cerr << "Error in recvfrom: " << strerror(errno) << std::endl;
+            close(udp_socket);
+        }
     }
     if (getPort(tmpClientAddr) != client_port)
     {
@@ -217,7 +226,7 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
     return 0;
 }
 
-int TFTPPacket::sendData(int udp_socket, sockaddr_in addr, int block_number, int block_size, int bytes_read, std::vector<char> data, bool *last_packet)
+int TFTPPacket::sendData(int udp_socket, sockaddr_in addr, int block_number, int block_size, int bytes_read, std::vector<char> data, bool *last_packet, std::vector<char> *last_data)
 {
     if (bytes_read < 0) {
         std::cout << "Error reading from stdin." << std::endl;
@@ -232,7 +241,7 @@ int TFTPPacket::sendData(int udp_socket, sockaddr_in addr, int block_number, int
     }
 
     DATAPacket response_packet(block_number, data);
-    if (response_packet.send(udp_socket, addr) == -1)
+    if (response_packet.send(udp_socket, addr, last_data) == -1)
     {
         std::cout << "Error sending DATA packet." << std::endl;
         return -1;
@@ -243,7 +252,7 @@ int TFTPPacket::sendData(int udp_socket, sockaddr_in addr, int block_number, int
 int TFTPPacket::sendError(int udp_socket, sockaddr_in addr, int error_code, std::string error_message)
 {
     ERRORPacket error_packet(error_code, error_message);
-    if (error_packet.send(udp_socket, addr) == -1)
+    if (error_packet.send(udp_socket, addr, nullptr) == -1)
     {
         return -1;
     }
@@ -359,7 +368,7 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
     return 0;
 }
 
-int RRQWRQPacket::send(int udpSocket, sockaddr_in destination) const {
+int RRQWRQPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> *last_data) const {
     std::vector<char> message;
     std::vector<char> opcode = intToBytes(this->opcode);
     message.insert(message.end(), opcode.begin(), opcode.end()); //opcode
@@ -398,6 +407,7 @@ int RRQWRQPacket::send(int udpSocket, sockaddr_in destination) const {
         close(udpSocket);
         return -1;
     }
+    *last_data = message;
     std::cout << "RRQ packet sent." << std::endl;
     return 0;
 }
@@ -428,7 +438,7 @@ int DATAPacket::parse(std::string receivedMessage) {
     return 0;
 }
 
-int DATAPacket::send(int udpSocket, sockaddr_in destination) const {
+int DATAPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> *last_data) const {
     std::vector<char> message;
     //message.push_back('0');
     //message.push_back(std::to_string(opcode)[0]);
@@ -443,6 +453,7 @@ int DATAPacket::send(int udpSocket, sockaddr_in destination) const {
         close(udpSocket);
         return -1;
     }
+    *last_data = message;
     std::cout << "DATA packet sent." << std::endl;
     return 0;
 }
@@ -466,7 +477,7 @@ int ACKPacket::parse(std::string receivedMessage){
     return 0;
 }
 
-int ACKPacket::send(int udpSocket, sockaddr_in destination) const {
+int ACKPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> *last_data) const {
     std::vector<char> message;
     std::vector<char> opcode = intToBytes(this->opcode);
     message.insert(message.end(), opcode.begin(), opcode.end()); //opcode
@@ -474,10 +485,14 @@ int ACKPacket::send(int udpSocket, sockaddr_in destination) const {
     message.insert(message.end(), block_number.begin(), block_number.end()); //blocknumber
 
     if (sendto(udpSocket, message.data(), message.size(), 0, (struct sockaddr*)&destination, sizeof(destination)) == -1) {
-        std::cout << "Chyba při odesílání broadcast zprávy ACK packet: " << strerror(errno) << std::endl;
-        close(udpSocket);
-        return -1;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return -3;
+        } else {
+            std::cerr << "Error in recvfrom: " << strerror(errno) << std::endl;
+            close(udpSocket);
+        }
     }
+    *last_data = message;
     std::cout << "ACK packet sent." << std::endl;
     return 0;
 }
@@ -579,7 +594,7 @@ int OACKPacket::parse(std::string receivedMessage) {
     return response;
 }*/
 
-int OACKPacket::send(int udpSocket, sockaddr_in destination) const {
+int OACKPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> *last_data) const {
     std::vector<char> message;
     std::vector<char> opcode = intToBytes(this->opcode);
     message.insert(message.end(), opcode.begin(), opcode.end()); //opcode
@@ -615,6 +630,7 @@ int OACKPacket::send(int udpSocket, sockaddr_in destination) const {
         close(udpSocket);
         return -1;
     }
+    *last_data = message;
     std::cout << "OACK packet sent." << std::endl;
     return 0;
 }
@@ -640,7 +656,7 @@ int ERRORPacket::parse(std::string receivedMessage){
     return 0;
 }
 
-int ERRORPacket::send(int udpSocket, sockaddr_in destination) const {
+int ERRORPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> *last_data) const {
     std::vector<char> message;
     std::vector<char> opcode = intToBytes(this->opcode);
     message.insert(message.end(), opcode.begin(), opcode.end()); //opcode
@@ -653,6 +669,7 @@ int ERRORPacket::send(int udpSocket, sockaddr_in destination) const {
         close(udpSocket);
         return -1;
     }
+    *last_data = message;
     std::cout << "ERROR packet sent: " << this->error_code << std::endl;
     return 0;
 }

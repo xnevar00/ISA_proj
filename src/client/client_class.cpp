@@ -17,12 +17,14 @@ Client *Client::getInstance()
         client_->last_packet = false;
         client_->block_number = 0;
         client_->block_size = 512;
-        client_->timeout = -1;
+        client_->timeout = 2;
         client_->tsize = -1;
         client_->current_state = TransferState::WaitForTransfer;
         client_->mode = "octet";
         client_->r_flag = false;
         client_->overflow = "";
+        client_->attempts_to_resend = 0;
+        client_->last_data = std::vector<char>();
     }
     return client_;
 }
@@ -122,10 +124,25 @@ int Client::transferData() {
     struct sockaddr_in tmpServerAddr;
     socklen_t tmpServerAddrLen = sizeof(tmpServerAddr);
 
+    setTimeout(&udpSocket, timeout);
+
     int bytesRead = recvfrom(udpSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&tmpServerAddr, &tmpServerAddrLen);
     if (bytesRead == -1) {
-        std::cout << "Error getting response from server." << std::endl;
-        return -1;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            std::cout << "Recvfrom timed out." << std::endl;
+            resendData(udpSocket, serverAddr, last_data);
+            attempts_to_resend++;
+            timeout *= 2;
+            if (attempts_to_resend > 5)
+            {
+                std::cout << "Server is not responding." << std::endl;
+                return -1;
+            }
+            setTimeout(&udpSocket, timeout);
+            return 0;
+        } else {
+            std::cerr << "Error in recvfrom: " << strerror(errno) << std::endl;
+        }
     }
 
     serverAddr = tmpServerAddr;
@@ -195,6 +212,7 @@ int Client::transferData() {
     if (transferFile() == -1)
     {
         //error handled in transferFile
+        clean(&file, destFilepath);
         return -1;
     }
 
@@ -269,7 +287,7 @@ int Client::handleSendingData()
     }
 
     block_number++;
-    int ok = TFTPPacket::sendData(udpSocket, serverAddr, block_number, block_size, bytesRead, data, &last_packet);
+    int ok = TFTPPacket::sendData(udpSocket, serverAddr, block_number, block_size, bytesRead, data, &last_packet, &last_data);
     if (ok == -1)
     {
         return -1;     //error already handled in sendData
@@ -281,7 +299,7 @@ int Client::handleSendingData()
 int Client::transferFile()
 {
     int ok = 0;
-    while(last_packet == false)
+    while(last_packet == false && attempts_to_resend < MAXRESENDATTEMPTS)
     {
         switch(current_state){
             case TransferState::WaitForTransfer:
@@ -295,7 +313,7 @@ int Client::transferFile()
                 break;
 
             case TransferState::SendAck:
-                ok = TFTPPacket::sendAck(block_number, udpSocket, serverAddr);
+                ok = TFTPPacket::sendAck(block_number, udpSocket, serverAddr, &last_data);
                 if (ok == -1)
                 {
                     std::cout << "Failed to send ACK packet" << std::endl;
@@ -314,7 +332,20 @@ int Client::transferFile()
                 } else if (ok == -2)
                 {
                     current_state = TransferState::ReceiveData;
+                } else if (ok == -3)
+                {
+                    attempts_to_resend++;
+                    if (attempts_to_resend < MAXRESENDATTEMPTS)
+                    {
+                        std::cout << "Resending ACK... (" << attempts_to_resend << ")" << std::endl;
+                        resendData(udpSocket, serverAddr, last_data);
+                    }
+                    current_state = TransferState::ReceiveData;
+                    timeout *= 2;
+                    setTimeout(&udpSocket, timeout);
+                    break;
                 }
+                attempts_to_resend = 0;
                 current_state = TransferState::SendAck;
                 break;
 
@@ -335,7 +366,20 @@ int Client::transferFile()
                     std::cout << "Illegal TFTP operation" << std::endl;
                     TFTPPacket::sendError(udpSocket, serverAddr, 4, "Illegal TFTP operation.");
                     return -1;
+                } else if (ok == -3)
+                {
+                    attempts_to_resend++;
+                    if (attempts_to_resend < MAXRESENDATTEMPTS)
+                    {
+                        std::cout << "Resending DATA... (" << attempts_to_resend << ")" << std::endl;
+                        resendData(udpSocket, serverAddr, last_data);
+                    }
+                    current_state = TransferState::ReceiveAck;
+                    timeout *= 2;
+                    setTimeout(&udpSocket, timeout);
+                    break;
                 }
+                attempts_to_resend = 0;
                 current_state = TransferState::SendData;
                 break;
             case TransferState::SendError:
@@ -345,20 +389,30 @@ int Client::transferFile()
     }
     if (direction == Direction::Upload)
     {
-        ok = TFTPPacket::receiveAck(udpSocket, block_number, serverPort);
-        if (ok == -1)
+        ok = -1;
+        while(ok != 0 && attempts_to_resend < 5)
         {
-            std::cout << "Illegal TFTP operation" << std::endl;
-            TFTPPacket::sendError(udpSocket, serverAddr, 4, "Illegal TFTP operation.");
-            return -1;
+            ok = TFTPPacket::receiveAck(udpSocket, block_number, serverPort);
+            if (ok == -1)
+            {
+                std::cout << "Illegal TFTP operation" << std::endl;
+                TFTPPacket::sendError(udpSocket, serverAddr, 4, "Illegal TFTP operation.");
+                return -1;
+            } else if (ok == -3)
+            {
+                std::cout << "Attempting to receive ACK..." << std::endl;
+            }
         }
     } else 
     {
-        ok = TFTPPacket::sendAck(block_number, udpSocket, serverAddr);
-        if (ok == -1)
+        while(ok != 0 && attempts_to_resend < 5)
         {
-            std::cout << "Failed to send ACK packet" << std::endl;
-            return -1;
+            ok = TFTPPacket::sendAck(block_number, udpSocket, serverAddr, &last_data);
+            if (ok == -1)
+            {
+                std::cout << "Failed to send ACK packet" << std::endl;
+                return -1;
+            }
         }
         block_number++;
     }
@@ -444,7 +498,7 @@ int Client::sendBroadcastMessage() {
     }
 
     RRQWRQPacket packet(opcode, filename, mode, timeout, block_size, tsize); //-1 because of default blocksize
-    if(packet.send(udpSocket, addr) == -1)
+    if(packet.send(udpSocket, addr, &last_data) == -1)
     {
         std::cout << "Error sending packet." << std::endl;
         return -1;

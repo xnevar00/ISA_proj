@@ -1,5 +1,4 @@
 #include "helper_functions.hpp"
-#include <cerrno>
 
 bool str_is_digits_only(std::string str) {
     for (char c : str) {
@@ -130,4 +129,35 @@ int getLocalPort(int udpSocket) {
 int getPort(const struct sockaddr_in& sockaddr)
 {
     return ntohs(sockaddr.sin_port);
+}
+
+int setTimeout(int *udp_socket, int seconds)
+{
+    struct timeval tv;
+    tv.tv_sec = seconds;
+    tv.tv_usec = 0;
+    return setsockopt(*udp_socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+}
+
+int resendData(int udp_socket, sockaddr_in destination, std::vector<char> data)
+{
+    if (sendto(udp_socket, data.data(), data.size(), 0, (struct sockaddr*)&destination, sizeof(destination)) == -1) {
+        std::cout << "Error while resending the message. " << std::endl;
+        close(udp_socket);
+        return -1;
+    }
+
+    return 0;
+}
+
+void clean(std::ofstream *file, std::string file_path)
+{
+    if (file->is_open())
+    {
+        file->close();
+    }
+
+    if (remove(file_path.c_str()) != 0) {
+        std::cerr << "Error deleting file." << std::endl;
+    }
 }

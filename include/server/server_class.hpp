@@ -69,9 +69,12 @@ class ClientHandler {
         int udpSocket;
         bool r_flag;
         std::string overflow;
+        std::vector<char> last_data;
+        int attempts_to_resend;
+        std::string full_filepath;
 
-        ClientHandler() : current_state(TransferState::WaitForTransfer), clientPort(-1), clientIP(""), direction(-1), block_number(0), tsize(-1), timeout(-1), block_size(512), block_size_set(false), last_packet(false),
-                          root_dirpath(""), udpSocket(-1), r_flag(false), overflow("") {}
+        ClientHandler() : current_state(TransferState::WaitForTransfer), clientPort(-1), clientIP(""), direction(-1), block_number(0), tsize(-1), timeout(2), block_size(512), block_size_set(false), last_packet(false),
+                          root_dirpath(""), udpSocket(-1), r_flag(false), overflow(""), attempts_to_resend(0), full_filepath("") {}
 
         void handleClient(std::string receivedMessage, int bytesRead, sockaddr_in clientAddr, std::string root_dirpath);
         void handlePacket(TFTPPacket *packet);

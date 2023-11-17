@@ -5,7 +5,10 @@
 #include <fstream>
 #include <vector>
 #include <arpa/inet.h>
+#include <unistd.h>
 #include <filesystem>
+#include <cerrno>
+#include <cstdio>
 
 #define IPADDRLEN 16
 #define MINPORTVALUE 1
@@ -13,6 +16,7 @@
 #define MAXTSIZEVALUE 4294967295
 #define MAXBLKSIZEVALUE 65464
 #define MAXTIMEOUTVALUE 255
+#define MAXRESENDATTEMPTS 4
 
 enum Opcode {
     RRQ = 1,
@@ -60,3 +64,6 @@ void printOackInfo(std::string src_ip, int src_port, std::string options);
 void printRrqWrqInfo(int opcode, std::string src_ip, int src_port, std::string filepath, std::string mode, std::string options);
 int getLocalPort(int udpSocket);
 int getPort(const struct sockaddr_in& sockaddr);
+int setTimeout(int *udp_socket, int seconds);
+int resendData(int udp_socket, sockaddr_in destination, std::vector<char> data);
+void clean(std::ofstream *file, std::string full_filepath);
