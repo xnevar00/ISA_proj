@@ -315,7 +315,13 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
     }
     if(transferFile() == -1)
     {
-        clean(&file, full_filepath);
+        if (direction == Direction::Upload)
+        {
+            clean(&file, full_filepath);
+        } else if (file.is_open())
+        {
+            file.close();
+        }
         return;
     }
 }
@@ -687,13 +693,21 @@ int ClientHandler::transferFile()
         block_number++;
     } else 
     {        
-        ok = TFTPPacket::receiveAck(udpSocket, block_number, clientPort);
-        if (ok == -1)
-        {
-            std::cout << "Illegal TFTP operation" << std::endl;
-            TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
-            return -1;
-        } 
+        ok = -1;
+        while(ok != 0 && attempts_to_resend < 5)
+        {   
+            ok = TFTPPacket::receiveAck(udpSocket, block_number, clientPort);
+            if (ok == -1)
+            {
+                std::cout << "Illegal TFTP operation" << std::endl;
+                TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
+                return -1;
+            } else if (ok == -3)
+            {
+                std::cout << "Resending DATA..." << std::endl;
+                resendData(udpSocket, clientAddr, last_data);
+            }
+        }
     }
     std::cout << "Transfer finished" << std::endl;
     return 0;

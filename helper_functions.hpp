@@ -54,7 +54,7 @@ std::string getArgument(int startIndex, std::string receivedMessage);
 int getAnotherStartIndex(int startIndex, std::string receivedMessage);
 std::string getSingleArgument(int startIndex, std::string receivedMessage); 
 int getOpcode(std::string receivedMessage);
-int setOption(int64_t *option, int *optionIndex, std::string receivedMessage);
+int setOption(int64_t *option, int *optionIndex, std::string receivedMessage, std::string *options_string);
 std::vector<char> intToBytes(unsigned short value);
 std::string getIPAddress(const struct sockaddr_in& sockaddr);
 void printAckInfo(std::string src_ip, int src_port, int block_id);

@@ -54,7 +54,7 @@ int getOpcode(std::string receivedMessage)
     return opcode;
 }
 
-int setOption(int64_t *option, int *optionIndex, std::string receivedMessage)
+int setOption(int64_t *option, int *optionIndex, std::string receivedMessage, std::string *options_string)
 {
     *optionIndex = getAnotherStartIndex(*optionIndex, receivedMessage);
     std::string option_str = getSingleArgument(*optionIndex, receivedMessage);
@@ -64,6 +64,7 @@ int setOption(int64_t *option, int *optionIndex, std::string receivedMessage)
     } else
     {
         *option = std::stoll(option_str);;
+        *options_string += "=" + option_str;
         return 0;
     }
 }
@@ -116,7 +117,7 @@ void printRrqWrqInfo(int opcode, std::string src_ip, int src_port, std::string f
     {
         return;
     }
-    std::cerr << output_opcode << src_ip << ":" << src_port << " \"" << filepath << "\" " << mode << " " << options << std::endl;
+    std::cerr << output_opcode << src_ip << ":" << src_port << " \"" << filepath << "\" " << mode << options << std::endl;
 }
 
 int getLocalPort(int udpSocket) {

@@ -1,5 +1,6 @@
 #include "../../include/packet/tftp-packet-class.hpp"
 #include <cstring>
+#include <algorithm>
 
 
 std::pair<TFTPPacket *, int> TFTPPacket::parsePacket(std::string receivedMessage, std::string src_IP, int src_port, int dst_port)
@@ -44,7 +45,7 @@ std::pair<TFTPPacket *, int> TFTPPacket::parsePacket(std::string receivedMessage
         switch(opcode){
         case 1:
         case 2:
-            printRrqWrqInfo(packet->opcode, src_IP, src_port, packet->filename, packet->mode, "");
+            printRrqWrqInfo(packet->opcode, src_IP, src_port, packet->filename, packet->mode, packet->options_string);
             break;
         case 3:
             printDataInfo(src_IP, src_port, dst_port, packet->blknum);
@@ -56,7 +57,7 @@ std::pair<TFTPPacket *, int> TFTPPacket::parsePacket(std::string receivedMessage
             printErrorInfo(src_IP, src_port, dst_port, packet->error_code, packet->error_message);
             break;
         case 6:
-            printOackInfo(src_IP, src_port, "");
+            printOackInfo(src_IP, src_port, packet->options_string);
             break;
         default :
             break;
@@ -270,6 +271,7 @@ RRQWRQPacket::RRQWRQPacket(int opcode, std::string filename, std::string mode, i
 }
 
 int RRQWRQPacket::parse(std::string receivedMessage) {
+    options_string = "";
     if (receivedMessage.length() < 4)
     {
         return -1;
@@ -299,6 +301,7 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
     while(optionIndex != -1 && optionIndex != (int)receivedMessage.length())
     {
         option = getSingleArgument(optionIndex, receivedMessage);
+        std::transform(option.begin(), option.end(), option.begin(), ::tolower);
         if (option == "")
         {
             std::cout << "CHYBA6" << std::endl;
@@ -313,7 +316,8 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
         {
             if (blksize == -1)
             {
-                if (setOption(&blksize, &optionIndex, receivedMessage) == -1)
+                options_string += " blksize";
+                if (setOption(&blksize, &optionIndex, receivedMessage, &options_string) == -1)
                 {
                     std::cout << "CHYBA6" << std::endl;
                     return -2;
@@ -327,7 +331,8 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
         {
             if (timeout == -1)
             {
-                if (setOption(&timeout, &optionIndex, receivedMessage) == -1)
+                options_string += " timeout";
+                if (setOption(&timeout, &optionIndex, receivedMessage, &options_string) == -1)
                 {
                     std::cout << "CHYBA6" << std::endl;
                     return -2;
@@ -341,7 +346,8 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
         {
             if (tsize == -1)
             {
-                if(setOption(&tsize, &optionIndex, receivedMessage) == -1)
+                options_string += " tsize";
+                if(setOption(&tsize, &optionIndex, receivedMessage, &options_string) == -1)
                 {
                     std::cout << "CHYBA6" << std::endl;
                     return -2;
@@ -527,9 +533,10 @@ int OACKPacket::parse(std::string receivedMessage) {
             return -1;
         } else if (option == "blksize")
         {
+            options_string += " blksize";
             if (blksize == -1)
             {
-                setOption(&blksize, &optionIndex, receivedMessage);
+                setOption(&blksize, &optionIndex, receivedMessage, &options_string);
             } else {
                 //TODO error packet
                 std::cout << "CHYBA" << std::endl;
@@ -537,9 +544,10 @@ int OACKPacket::parse(std::string receivedMessage) {
             }
         } else if (option == "timeout")
         {
+            options_string += " timeout";
             if (timeout == -1)
             {
-                setOption(&timeout, &optionIndex, receivedMessage);
+                setOption(&timeout, &optionIndex, receivedMessage, &options_string);
             } else {
                 //TODO error packet
                 std::cout << "CHYBA" << std::endl;
@@ -547,9 +555,10 @@ int OACKPacket::parse(std::string receivedMessage) {
             }
         } else if (option == "tsize")
         {
+            options_string += " tsize";
             if (tsize == -1)
             {
-                setOption(&tsize, &optionIndex, receivedMessage);
+                setOption(&tsize, &optionIndex, receivedMessage, &options_string);
             } else {
                 //TODO error packet
                 std::cout << "CHYBA" << std::endl;

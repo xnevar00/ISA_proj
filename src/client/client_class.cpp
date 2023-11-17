@@ -16,9 +16,9 @@ Client *Client::getInstance()
         client_->udpSocket = -1;
         client_->last_packet = false;
         client_->block_number = 0;
-        client_->block_size = 512;
+        client_->block_size = 1021;
         client_->timeout = 2;
-        client_->tsize = -1;
+        client_->tsize = 10;
         client_->current_state = TransferState::WaitForTransfer;
         client_->mode = "octet";
         client_->r_flag = false;
@@ -400,20 +400,19 @@ int Client::transferFile()
                 return -1;
             } else if (ok == -3)
             {
-                std::cout << "Attempting to receive ACK..." << std::endl;
+                std::cout << "Resending DATA..." << std::endl;
+                resendData(udpSocket, serverAddr, last_data);
             }
         }
     } else 
     {
-        while(ok != 0 && attempts_to_resend < 5)
+        ok = TFTPPacket::sendAck(block_number, udpSocket, serverAddr, &last_data);
+        if (ok == -1)
         {
-            ok = TFTPPacket::sendAck(block_number, udpSocket, serverAddr, &last_data);
-            if (ok == -1)
-            {
-                std::cout << "Failed to send ACK packet" << std::endl;
-                return -1;
-            }
+            std::cout << "Failed to send ACK packet" << std::endl;
+            return -1;
         }
+
         block_number++;
     }
     std::cout << "End of transmission." << std::endl;

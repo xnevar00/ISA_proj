@@ -24,6 +24,7 @@ public:
     std::vector<char> data;
     unsigned short error_code;
     std::string error_message;
+    std::string options_string;
 
     virtual int parse(std::string receivedMessage) = 0;
     virtual int send(int udpSocket, sockaddr_in destination, std::vector<char> *last_data) const = 0;
