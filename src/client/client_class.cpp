@@ -126,23 +126,31 @@ int Client::transferData() {
 
     setTimeout(&udpSocket, timeout);
 
-    int bytesRead = recvfrom(udpSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&tmpServerAddr, &tmpServerAddrLen);
-    if (bytesRead == -1) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            std::cout << "Recvfrom timed out." << std::endl;
-            resendData(udpSocket, serverAddr, last_data);
-            attempts_to_resend++;
-            timeout *= 2;
-            if (attempts_to_resend > 5)
-            {
-                std::cout << "Server is not responding." << std::endl;
+    int bytesRead = -1;
+    attempts_to_resend = 0;
+    while((attempts_to_resend <= MAXRESENDATTEMPTS) && (bytesRead == -1))
+    {
+        bytesRead = recvfrom(udpSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&tmpServerAddr, &tmpServerAddrLen);
+        if (bytesRead == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                attempts_to_resend++;
+                if (attempts_to_resend <= MAXRESENDATTEMPTS)
+                {
+                    std::cout << "Resending REQUEST... (" << attempts_to_resend << ")" << std::endl;
+                    resendData(udpSocket, serverAddr, last_data);       
+                    timeout *= 2;
+                    setTimeout(&udpSocket, timeout);
+                }
+            } else {
+                std::cerr << "Error in recvfrom: " << strerror(errno) << std::endl;
                 return -1;
             }
-            setTimeout(&udpSocket, timeout);
-            return 0;
-        } else {
-            std::cerr << "Error in recvfrom: " << strerror(errno) << std::endl;
         }
+    }
+    if (bytesRead == -1 && attempts_to_resend >= MAXRESENDATTEMPTS)
+    {
+        std::cout << "Server is not responding, aborting." << std::endl;
+        return -1;
     }
 
     serverAddr = tmpServerAddr;
@@ -459,6 +467,8 @@ int Client::sendBroadcastMessage() {
     std::memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port); // Port 69 pro TFTP
+
+    serverAddr = addr;
 
     // Převod hostname na IP adresu
     struct addrinfo hints, *res;

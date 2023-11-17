@@ -143,8 +143,7 @@ int setTimeout(int *udp_socket, int seconds)
 int resendData(int udp_socket, sockaddr_in destination, std::vector<char> data)
 {
     if (sendto(udp_socket, data.data(), data.size(), 0, (struct sockaddr*)&destination, sizeof(destination)) == -1) {
-        std::cout << "Error while resending the message. " << std::endl;
-        close(udp_socket);
+        std::cout << "Error while resending the message:" << errno << std::endl;
         return -1;
     }
 

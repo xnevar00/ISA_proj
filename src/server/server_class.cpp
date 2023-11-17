@@ -574,7 +574,7 @@ int ClientHandler::handleSendingData()
 int ClientHandler::transferFile()
 {
     int ok;
-    while(last_packet == false && !terminateThreads && attempts_to_resend < MAXRESENDATTEMPTS)
+    while(last_packet == false && !terminateThreads && attempts_to_resend <= MAXRESENDATTEMPTS)
     {
         switch(current_state){
             case TransferState::WaitForTransfer:
@@ -612,7 +612,7 @@ int ClientHandler::transferFile()
                 } else if (ok == -3)
                 {
                     attempts_to_resend++;
-                    if (attempts_to_resend < MAXRESENDATTEMPTS)
+                    if (attempts_to_resend <= MAXRESENDATTEMPTS)
                     {
                         std::cout << "Resending ACK... (" << attempts_to_resend << ")"<< std::endl;
                         resendData(udpSocket, clientAddr, last_data);
@@ -646,7 +646,7 @@ int ClientHandler::transferFile()
                 } else if (ok == -3)
                 {
                     attempts_to_resend++;
-                    if (attempts_to_resend < MAXRESENDATTEMPTS)
+                    if (attempts_to_resend <= MAXRESENDATTEMPTS)
                     {
                         std::cout << "Resending DATA... (" << attempts_to_resend << ")"<< std::endl;
                         resendData(udpSocket, clientAddr, last_data);
