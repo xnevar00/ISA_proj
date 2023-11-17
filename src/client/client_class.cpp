@@ -20,7 +20,7 @@ Client *Client::getInstance()
         client_->timeout = -1;
         client_->tsize = -1;
         client_->current_state = TransferState::WaitForTransfer;
-        client_->mode = "netascii";
+        client_->mode = "octet";
         client_->r_flag = false;
         client_->overflow = "";
     }

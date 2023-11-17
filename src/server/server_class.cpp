@@ -4,6 +4,17 @@
 
 namespace fs = std::filesystem;
 
+std::atomic<bool> terminateThreads(false);
+
+void signalHandler(int signum) {
+    terminateThreads = true;
+}
+
+void setupSignalHandler() {
+    std::signal(SIGINT, signalHandler);
+}
+
+
 Server* Server::server_ = nullptr;;
 
 Server *Server::getInstance()
@@ -130,22 +141,51 @@ int Server::respond_to_client(int udpSocket, const char* message, size_t message
 
 void Server::server_loop(int udpSocket) {
     char buffer[65507]; // Buffer pro přijatou zprávu, max velikost UDP packetu
+
+    //SIGINT handling
+    setupSignalHandler();
+
+    std::vector<std::future<void>> futures_vector;
+
     struct sockaddr_in clientAddr;
     socklen_t clientAddrLen = sizeof(clientAddr);
-    while (true) {
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 100000;
+    if (setsockopt(udpSocket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+    std::cerr << "Error setting socket options: " << strerror(errno) << std::endl;
+    }
+
+    while (true && !terminateThreads) {
         int bytesRead = recvfrom(udpSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
-        if (bytesRead == StatusCode::CONNECTION_ERROR) {
-            std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
-            continue;
+        if (bytesRead == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                // Timeout, check if we should terminate
+                if (terminateThreads) {
+                    std::cout << "Terminating the server." << std::endl;
+                    for (auto& future : futures_vector) {
+                        future.get();
+                    }
+                    break;
+                }
+                futures_vector.erase(std::remove_if(futures_vector.begin(), futures_vector.end(), [](std::future<void>& ftr) {
+                    return ftr.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+                }), futures_vector.end());
+                continue;
+            } else {
+                std::cout << "Error waiting for message: " << strerror(errno) << std::endl;
+                continue;
+            }
         }
 
         std::cout << "New client!" << std::endl;
         ClientHandler *clientHandlerObj = new ClientHandler();
         std::string receivedMessage(buffer, bytesRead);
         std::cout << "Just received message: " << receivedMessage << std::endl;
-        std::thread clientThread(&ClientHandler::handleClient, clientHandlerObj, receivedMessage, bytesRead, clientAddr, root_dirpath);
-        clientThreads.push_back(std::move(clientThread));
+        auto future = std::async(std::launch::async, &ClientHandler::handleClient, clientHandlerObj, receivedMessage, bytesRead, clientAddr, root_dirpath);
+        futures_vector.push_back(std::move(future));
     }
+    close(udpSocket);
 }
 
 
@@ -173,6 +213,11 @@ void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, soc
         if (packet == nullptr)
         {
             TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
+            return;
+        }
+        if (packet->blksize < 8)
+        {
+            TFTPPacket::sendError(udpSocket, clientAddr, 8, "Illegal options.");
             return;
         }
         switch (packet->opcode){
@@ -487,7 +532,7 @@ int ClientHandler::handleSendingData()
 int ClientHandler::transferFile()
 {
     int ok;
-    while(last_packet == false)
+    while(last_packet == false && !terminateThreads)
     {
         switch(current_state){
             case TransferState::WaitForTransfer:
@@ -558,6 +603,11 @@ int ClientHandler::transferFile()
                 TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
                 break;
         }
+    }
+    if (terminateThreads)
+    {   
+        std::cout << "Ending thread because of SIGINT." << std::endl;
+        return -1;
     }
     if (direction == Direction::Upload)
     {

@@ -9,7 +9,16 @@
 #include <vector>
 #include <thread>
 #include <string>
+#include <atomic>
+#include <signal.h>
+#include <csignal>
+#include <future>
+#include <algorithm>
 #include "../../include/packet/tftp-packet-class.hpp"
+
+void signalHandler(int signum);
+
+void setupSignalHandler();
 
 class Server
 {
