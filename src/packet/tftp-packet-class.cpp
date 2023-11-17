@@ -85,7 +85,6 @@ int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number, int clie
     int bytesRead = recvfrom(udp_socket, received_data, sizeof(received_data), 0, (struct sockaddr*)&addr, &addrLen);
     if (bytesRead == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            std::cout << "Timeout" << std::endl;
             return -3;
         } else {
             std::cerr << "Error in recvfrom: " << strerror(errno) << std::endl;
