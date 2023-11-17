@@ -127,3 +127,7 @@ int getLocalPort(int udpSocket) {
     return ntohs(localAddress.sin_port);
 }
 
+int getPort(const struct sockaddr_in& sockaddr)
+{
+    return ntohs(sockaddr.sin_port);
+}

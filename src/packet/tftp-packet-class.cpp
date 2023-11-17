@@ -67,7 +67,7 @@ int TFTPPacket::sendAck(int block_number, int udp_socket, sockaddr_in addr)
     return 0;
 }
 
-int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number)
+int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number, int client_port)
 {
     std::cout << "Waiting for ACK packet..." << std::endl;
     char received_data[65507];
@@ -78,6 +78,11 @@ int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number)
     if (bytesRead == -1) {
         std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
         return -1;
+    }
+    if (getPort(addr) != client_port)
+    {
+        TFTPPacket::sendError(udp_socket, addr, 5, "Unknown transfer ID.");
+        return -2;
     }
 
     std::string received_message(received_data, bytesRead);
@@ -99,42 +104,51 @@ int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number)
     }
     if (packet->blknum != block_number)
     {
-        std::cout << "Wrong block number!" << std::endl;
         return -1;
     }
 
     return 0;
 }
 
-int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, std::ofstream *file, bool *last_packet)
+int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, std::ofstream *file, bool *last_packet, int client_port, bool *r_flag, std::string mode)
 {
     char received_data[65507]; // Buffer pro přijatou zprávu, max velikost UDP packetu
-    struct sockaddr_in clientAddr;
-    socklen_t clientAddrLen = sizeof(clientAddr);
+    struct sockaddr_in tmpClientAddr;
+    socklen_t tmpClientAddrLen = sizeof(tmpClientAddr);
 
     std::cout << "Waiting for DATA packet..." << std::endl;
-    int bytesRead = recvfrom(udp_socket, received_data, sizeof(received_data), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
+    int bytesRead = recvfrom(udp_socket, received_data, sizeof(received_data), 0, (struct sockaddr*)&tmpClientAddr, &tmpClientAddrLen);
     if (bytesRead == -1) {
         std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
         return -1;
+    }
+    if (getPort(tmpClientAddr) != client_port)
+    {
+        TFTPPacket::sendError(udp_socket, tmpClientAddr, 5, "Unknown transfer ID.");
+        return -2;
     }
 
     std::string received_message(received_data, bytesRead);
     if (bytesRead < 4)
     {
-        //TODO error packet
+        TFTPPacket::sendError(udp_socket, tmpClientAddr, 4, "Illegal TFTP operation.");
         return -1;
     }
 
-    TFTPPacket *packet = TFTPPacket::parsePacket(received_message, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(udp_socket));
+    TFTPPacket *packet = TFTPPacket::parsePacket(received_message, getIPAddress(tmpClientAddr), ntohs(tmpClientAddr.sin_port), getLocalPort(udp_socket));
     if (packet == nullptr)
     {
-        //TODO error packet
+        TFTPPacket::sendError(udp_socket, tmpClientAddr, 4, "Illegal TFTP operation.");
         return -1;
     }
-    if (packet->opcode != Opcode::DATA)
+    if (packet->opcode != Opcode::DATA && packet->opcode != Opcode::ERROR)
     {
-        //TODO error packet
+        TFTPPacket::sendError(udp_socket, tmpClientAddr, 4, "Illegal TFTP operation.");
+        return -1;
+    }
+    if (packet->opcode == Opcode::ERROR)
+    {
+        //just return, no need to respond
         return -1;
     }
     if (packet->blknum != block_number)
@@ -143,13 +157,57 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
         std::cout << "Wrong block number!" << std::endl;
         return -1;
     }
-    file->write(packet->data.data(), packet->data.size());
+
     if ((unsigned short int)packet->data.size() < block_size)
     {
         *last_packet = true;
-        file->close();
     }
 
+
+    std::vector<char> transfered_data;
+    if (mode == "netascii")
+    {
+        for (size_t i = 0; i < packet->data.size(); i++) {
+            if (*r_flag == true)
+            {
+                *r_flag = false;
+                if (packet->data[i] == '\n') {
+                    transfered_data.push_back('\n');
+                    
+                    continue;
+                } else if (packet->data[i] == '\0') {
+                    transfered_data.push_back('\r');
+                    continue;
+                }
+            }
+            if (packet->data[i] == '\r') {
+                if (i == packet->data.size() - 1) {
+                    *r_flag = true;
+                    continue;
+                } else if (packet->data[i + 1] == '\n') {
+                    transfered_data.push_back('\n');
+                    i++;
+                    continue;
+                } else if (packet->data[i + 1] == '\0') {
+                    transfered_data.push_back('\r');
+                    i++;
+                    continue;
+                }
+            }
+            transfered_data.push_back(packet->data[i]);
+        }
+    } else
+    {
+        transfered_data = packet->data;
+    }
+    
+
+    file->write(transfered_data.data(), transfered_data.size());
+
+    if (*last_packet == true)
+    {
+        file->close();
+    }
     return 0;
 }
 
@@ -161,10 +219,12 @@ int TFTPPacket::sendData(int udp_socket, sockaddr_in addr, int block_number, int
     }
 
     data.resize(bytes_read);
-    if (data.size() < block_size)
+
+    if (data.size() < (long unsigned)block_size)
     {
         *last_packet = true;
     }
+
     DATAPacket response_packet(block_number, data);
     if (response_packet.send(udp_socket, addr) == -1)
     {

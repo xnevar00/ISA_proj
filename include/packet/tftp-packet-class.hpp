@@ -29,8 +29,8 @@ public:
     virtual int send(int udpSocket, sockaddr_in destination) const = 0;
     static TFTPPacket *parsePacket(std::string receivedMessage, std::string srcIP, int srcPort, int dstPort);
     static int sendAck(int block_number, int udp_socket, sockaddr_in addr);
-    static int receiveAck(int udp_socket, short unsigned block_number);
-    static int receiveData(int udp_socket, int block_number, int block_size, std::ofstream *file, bool *last_packet);
+    static int receiveAck(int udp_socket, short unsigned block_number, int client_port);
+    static int receiveData(int udp_socket, int block_number, int block_size, std::ofstream *file, bool *last_packet, int client_port, bool *r_flag, std::string mode);
     static int sendData(int udp_socket, sockaddr_in addr, int block_number, int block_size, int bytes_read, std::vector<char> data, bool *last_packet);
     static int sendError(int udp_socket, sockaddr_in addr, int error_code, std::string error_message);
 };

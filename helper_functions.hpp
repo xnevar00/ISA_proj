@@ -56,3 +56,4 @@ void printErrorInfo(std::string src_ip, int src_port, int dst_port, unsigned sho
 void printOackInfo(std::string src_ip, int src_port, std::string options);
 void printRrqWrqInfo(int opcode, std::string src_ip, int src_port, std::string filepath, std::string mode, std::string options);
 int getLocalPort(int udpSocket);
+int getPort(const struct sockaddr_in& sockaddr);

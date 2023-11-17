@@ -143,7 +143,7 @@ void Server::server_loop(int udpSocket) {
         ClientHandler *clientHandlerObj = new ClientHandler();
         std::string receivedMessage(buffer, bytesRead);
         std::cout << "Just received message: " << receivedMessage << std::endl;
-        std::thread clientThread(&ClientHandler::handleClient, clientHandlerObj, receivedMessage, bytesRead, clientAddr, clientAddrLen, root_dirpath);
+        std::thread clientThread(&ClientHandler::handleClient, clientHandlerObj, receivedMessage, bytesRead, clientAddr, root_dirpath);
         clientThreads.push_back(std::move(clientThread));
     }
 }
@@ -162,9 +162,10 @@ void Server::server_loop(int udpSocket) {
 
 
 //*********************ERRORS HANDLED*****************/
-void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, sockaddr_in set_clientAddr, socklen_t clientAddrLen, std::string set_root_dirpath){
+void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, sockaddr_in set_clientAddr, std::string set_root_dirpath){
     clientAddr = set_clientAddr;
     root_dirpath = set_root_dirpath;
+    clientPort = getPort(clientAddr);
 
     if(bytesRead >= 2)
     {
@@ -210,6 +211,7 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
     filename = packet->filename;
     timeout = packet->timeout;
     tsize = packet->tsize;
+    mode = packet->mode;
     
     std::cout << "Handling packet" << std::endl;
     if (direction == Direction::Upload)
@@ -255,6 +257,7 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
         }
     }
     transferFile();
+    close(udpSocket);
 }
 
 //**************ERRORS HANDLED*****************/
@@ -295,13 +298,18 @@ int ClientHandler::createUdpSocket()
 int ClientHandler::receiveData()
 {
     char received_data[65507]; // Buffer pro přijatou zprávu, max velikost UDP packetu
-    struct sockaddr_in clientAddr;
-    socklen_t clientAddrLen = sizeof(clientAddr);
+    struct sockaddr_in tmpClientAddr;
+    socklen_t tmpClientAddrLen = sizeof(tmpClientAddr);
 
     std::cout << "cekam na data" << std::endl;
-    int bytesRead = recvfrom(udpSocket, received_data, sizeof(received_data), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
+    int bytesRead = recvfrom(udpSocket, received_data, sizeof(received_data), 0, (struct sockaddr*)&tmpClientAddr, &tmpClientAddrLen);
     if (bytesRead == StatusCode::CONNECTION_ERROR) {
         std::cout << "Chyba při čekání na zprávu: " << strerror(errno) << std::endl;
+        return -1;
+    }
+    if (getPort(tmpClientAddr) != clientPort)
+    {
+        TFTPPacket::sendError(udpSocket, tmpClientAddr, 5, "Unknown transfer ID.");
         return -1;
     }
 
@@ -309,30 +317,31 @@ int ClientHandler::receiveData()
     std::cout << "Prijata zprava:" << received_message << std::endl;
     if (bytesRead < 4)
     {
-        //TODO error packet
+        TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
         return -1;
     }
 
     TFTPPacket *packet = TFTPPacket::parsePacket(received_message, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(udpSocket));
     if (packet == nullptr)
     {
-        //TODO error packet
+        TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
         return -1;
     }
 
     if (packet->opcode != Opcode::DATA)
     {
-        //TODO error packet
+        TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
         return -1;
     }
     if (packet->blknum != block_number)
     {
-        //TODO osetrit
-        std::cout << "spatny block number!" << std::endl;
+        
+        TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
         return -1;
     }
     if (writeData(packet->data) == -1)
     {
+        //error already handled
         return -1;
     }
     if ((unsigned short int)packet->data.size() < block_size)
@@ -391,7 +400,7 @@ int ClientHandler::writeData(std::vector<char> data)
     if (file.fail())
     {
         std::cerr << "Error writing to file maybe because of not enough diskspace." << std::endl;
-        TFTPPacket::sendError(udpSocket, clientAddr, 3, "Not enough diskspace.");
+        TFTPPacket::sendError(udpSocket, clientAddr, 3, "Disk full or allocation exceeded.");
         return -1;
     }
     return 0;
@@ -400,12 +409,73 @@ int ClientHandler::writeData(std::vector<char> data)
 int ClientHandler::handleSendingData()
 {
     std::vector<char> data;
+    ssize_t bytesRead = 0;
+    char c;
     char buffer[block_size];
-    downloaded_file.read(buffer, block_size);
-    data.insert(data.end(), buffer, buffer + block_size);
-    block_number++;
-    ssize_t bytesRead = downloaded_file.gcount();
+    if (mode == "octet")
+    {
+        downloaded_file.read(buffer, block_size);
+        if (downloaded_file.fail() && !downloaded_file.eof())
+        {
+            TFTPPacket::sendError(udpSocket, clientAddr, 3, "Disk full or allocation exceeded.");
+            return -1;
+        }
+        data.insert(data.end(), buffer, buffer + block_size);
+        bytesRead = downloaded_file.gcount();
+    } else if (mode == "netascii")
+    {
+        downloaded_file.get(c);
+        if (overflow != "")
+        {
+            while(overflow != "" && bytesRead < block_size)
+            {
+                data.push_back(overflow[0]);
+                overflow.erase(0, 1);
+                bytesRead++;
+            }
+        }
+        while(downloaded_file.good() && bytesRead < block_size)
+        {
+            if (c == '\n')
+            {
+                data.push_back('\r');
+                bytesRead++;
+                if ((int)data.size() < block_size)
+                {
+                    data.push_back('\n');
+                    bytesRead ++;
+                }  else
+                {
+                    overflow += "\n";
+                }
+            } else if (c == '\r')
+            {
+                data.push_back('\r');
+                bytesRead++;
+                if ((int)data.size() < block_size)
+                {
+                    data.push_back('\0');
+                    bytesRead++;
+                } else
+                {
+                    overflow += "\0";
+                }
+            } else
+            {
+                data.push_back(c);
+                bytesRead++;
+            }
+            downloaded_file.get(c);
+        }
+        overflow += c;
+        if (downloaded_file.fail() && !downloaded_file.eof())
+        {
+            TFTPPacket::sendError(udpSocket, clientAddr, 3, "Disk full or allocation exceeded.");
+            return -1;
+        }
+    }
 
+    block_number++;
     TFTPPacket::sendData(udpSocket, clientAddr, block_number, block_size, bytesRead, data, &(last_packet));
     if (last_packet == true)
     {
@@ -442,11 +512,16 @@ int ClientHandler::transferFile()
                 break;
             case TransferState::ReceiveData:
                 //receive data
-                ok = TFTPPacket::receiveData(udpSocket, block_number, block_size, &(file), &(last_packet));
+                ok = TFTPPacket::receiveData(udpSocket, block_number, block_size, &(file), &(last_packet), clientPort, &r_flag, mode);
                 if (ok == -1)
                 {
                     std::cout << "Illegal TFTP operation." << std::endl;
                     TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP Operation.");
+                } else if (ok == -2)
+                {
+                    std::cout << "Unknown transfer ID." << std::endl;
+                    current_state = TransferState::ReceiveData;
+                    break;
                 }
                 current_state = TransferState::SendAck;
                 break;
@@ -462,7 +537,7 @@ int ClientHandler::transferFile()
                 break;
             case TransferState::ReceiveAck:
                 //receive ack
-                ok = TFTPPacket::receiveAck(udpSocket, block_number);
+                ok = TFTPPacket::receiveAck(udpSocket, block_number, clientPort);
                 if (ok == -1)
                 {
                     std::cout << "Illegal TFTP operation" << std::endl;
@@ -478,8 +553,9 @@ int ClientHandler::transferFile()
                     current_state = TransferState::SendData;
                 }
                 break;
-            case TransferState::SendError:
-                //send error
+            default:
+                std::cout << "Illegal TFTP operation" << std::endl;
+                TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
                 break;
         }
     }
@@ -494,7 +570,7 @@ int ClientHandler::transferFile()
         block_number++;
     } else 
     {        
-        ok = TFTPPacket::receiveAck(udpSocket, block_number);
+        ok = TFTPPacket::receiveAck(udpSocket, block_number, clientPort);
         if (ok == -1)
         {
             std::cout << "Illegal TFTP operation" << std::endl;

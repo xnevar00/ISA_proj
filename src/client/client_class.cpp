@@ -20,6 +20,9 @@ Client *Client::getInstance()
         client_->timeout = -1;
         client_->tsize = -1;
         client_->current_state = TransferState::WaitForTransfer;
+        client_->mode = "netascii";
+        client_->r_flag = false;
+        client_->overflow = "";
     }
     return client_;
 }
@@ -109,8 +112,7 @@ int Client::createUdpSocket() {
     getsockname(udpSocket, (struct sockaddr*)&localAddress, &addressLength);
 
     //for stderr prints
-    int clientPort = ntohs(localAddress.sin_port);
-    std::string clientIP = getIPAddress(localAddress);
+    clientPort = ntohs(localAddress.sin_port);
 
     return 0;
 }
@@ -127,6 +129,7 @@ int Client::transferData() {
     }
 
     serverAddr = tmpServerAddr;
+    serverPort = getPort(serverAddr);
 
     std::string receivedMessage(buffer, bytesRead);
 
@@ -202,11 +205,70 @@ int Client::transferData() {
 int Client::handleSendingData()
 {
     std::cout << "Beru data ze stdin" << std::endl;
-    std::vector<char> data(block_size);
-    std::cin.read(data.data(), block_size);
-    block_number++;
-    ssize_t bytesRead = std::cin.gcount();
+    ssize_t bytesRead = 0;
+    char c;
+    std::vector<char> data;
+    if (mode == "octet")
+    {
+        std::vector<char> tmp_data(block_size);
+        std::cin.read(tmp_data.data(), block_size);
+        data = tmp_data;
+        bytesRead = std::cin.gcount();
+    } else if (mode == "netascii")
+    {
+        std::cin.get(c);
+        if (overflow != "")
+        {
+            while(overflow != "" && (int)bytesRead < block_size)
+            {
+                data.push_back(overflow[0]);
+                overflow.erase(0, 1);
+                bytesRead++;
+            }
+        }
+        while(!std::cin.fail() && (int)bytesRead < block_size)
+        {
+            if (c == '\n')
+            {
+                data.push_back('\r');
+                bytesRead++;
+                if ((int)data.size() < block_size)
+                {
+                    data.push_back('\n');
+                    bytesRead ++;
+                }  else
+                {
+                    overflow += "\n";
+                }
+            } else if (c == '\r')
+            {
+                data.push_back('\r');
+                bytesRead++;
+                if ((int)data.size() < block_size)
+                {
+                    data.push_back('\0');
+                    bytesRead++;
+                } else
+                {
+                    overflow += "\0";
+                }
+            } else
+            {
+                data.push_back(c);
+                bytesRead++;
+            }
+            std::cin.get(c);
+        }
+        overflow += c;
+        if (std::cin.fail() && !std::cin.eof())
+        {
+            TFTPPacket::sendError(udpSocket, serverAddr, 3, "Disk full or allocation exceeded.");
+            return -1;
+        }
+        std::cout << "bytes read:" << bytesRead << std::endl;
+    }
 
+    block_number++;
     int ok = TFTPPacket::sendData(udpSocket, serverAddr, block_number, block_size, bytesRead, data, &last_packet);
     if (ok == -1)
     {
@@ -244,12 +306,14 @@ int Client::transferFile()
                 break;
                 
             case TransferState::ReceiveData:
-                ok = TFTPPacket::receiveData(udpSocket, block_number, block_size, &(file), &(last_packet));
+                ok = TFTPPacket::receiveData(udpSocket, block_number, block_size, &(file), &(last_packet), serverPort, &r_flag, mode);
                 if (ok == -1)
                 {
-                    std::cout << "Illegal TFTP operation" << std::endl;
-                    TFTPPacket::sendError(udpSocket, serverAddr, 4, "Illegal TFTP operation.");
+                    //error already handled
                     return -1;
+                } else if (ok == -2)
+                {
+                    current_state = TransferState::ReceiveData;
                 }
                 current_state = TransferState::SendAck;
                 break;
@@ -265,7 +329,7 @@ int Client::transferFile()
                 break;
 
             case TransferState::ReceiveAck:
-                ok = TFTPPacket::receiveAck(udpSocket, block_number);
+                ok = TFTPPacket::receiveAck(udpSocket, block_number, serverPort);
                 if (ok == -1)
                 {
                     std::cout << "Illegal TFTP operation" << std::endl;
@@ -281,7 +345,7 @@ int Client::transferFile()
     }
     if (direction == Direction::Upload)
     {
-        ok = TFTPPacket::receiveAck(udpSocket, block_number);
+        ok = TFTPPacket::receiveAck(udpSocket, block_number, serverPort);
         if (ok == -1)
         {
             std::cout << "Illegal TFTP operation" << std::endl;
@@ -379,7 +443,7 @@ int Client::sendBroadcastMessage() {
         }
     }
 
-    RRQWRQPacket packet(opcode, filename, "octet", timeout, block_size, tsize); //-1 because of default blocksize
+    RRQWRQPacket packet(opcode, filename, mode, timeout, block_size, tsize); //-1 because of default blocksize
     if(packet.send(udpSocket, addr) == -1)
     {
         std::cout << "Error sending packet." << std::endl;

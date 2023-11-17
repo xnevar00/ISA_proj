@@ -35,7 +35,9 @@ protected:
     int serverPort;
     std::string serverIP;
     int clientPort;
-    std::string clientIP;
+    std::string mode;
+    bool r_flag;
+    std::string overflow;
 
 
 
