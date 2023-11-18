@@ -1,3 +1,7 @@
+// File:    output_handler.hpp
+// Author:  Veronika Nevarilova
+// Date:    11/2023
+
 #include <string>
 #include <mutex>
 

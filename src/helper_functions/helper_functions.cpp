@@ -1,4 +1,8 @@
-#include "helper_functions.hpp"
+// File:    helper_functions.cpp
+// Author:  Veronika Nevarilova
+// Date:    11/2023
+
+#include "../../include/helper_functions/helper_functions.hpp"
 
 bool str_is_digits_only(std::string str) {
     for (char c : str) {

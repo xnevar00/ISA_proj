@@ -1,9 +1,13 @@
+// File:    tftp-packet-class.hpp
+// Author:  Veronika Nevarilova
+// Date:    11/2023
+
 #include <memory>
 #include <iostream>
 #include <string>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include "../../helper_functions.hpp"
+#include "../helper_functions/helper_functions.hpp"
 #include <cstdlib>
 #include <ctype.h>
 #include <netdb.h>

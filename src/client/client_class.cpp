@@ -1,3 +1,7 @@
+// File:    client_class.cpp
+// Author:  Veronika Nevarilova
+// Date:    11/2023
+
 #include <iostream>
 #include "../../include/client/client_class.hpp"
 

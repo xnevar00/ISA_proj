@@ -1,3 +1,7 @@
+// File:    server_class.hpp
+// Author:  Veronika Nevarilova
+// Date:    11/2023
+
 #include <iostream>
 #include <getopt.h>
 #include <cstdlib>

@@ -1,3 +1,7 @@
+// File:    tftp-client.cpp
+// Author:  Veronika Nevarilova
+// Date:    11/2023
+
 #include <iostream>
 #include <cstdlib>
 #include <cstring>
@@ -7,7 +11,6 @@
 #include <netdb.h>
 #include <unistd.h>
 #include "../../include/client/client_class.hpp"
-
 
 int main(int argc, char* argv[]) {
     /*std::streambuf* orig_stdout = std::cout.rdbuf();
@@ -29,5 +32,4 @@ int main(int argc, char* argv[]) {
     }
     ok = client->communicate();
     return ok;
-
 }
