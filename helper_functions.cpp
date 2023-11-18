@@ -38,11 +38,10 @@ std::string getSingleArgument(int startIndex, std::string receivedMessage)
     std::string argument = getArgument(startIndex, receivedMessage);
     if (argument == "")
     {
-        //TODO error packet
-        std::cout << "CHYBA" << std::endl;
+        OutputHandler::getInstance()->print_to_cout("CHYBA");
         return "";
     }
-    std::cout << "Argument: " << argument << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Argument: " + argument);
     return argument;
 }
 
@@ -90,25 +89,25 @@ std::string getIPAddress(const struct sockaddr_in& sockaddr) {
     if (inet_ntop(AF_INET, &(sockaddr.sin_addr), ipBuffer, INET_ADDRSTRLEN) != nullptr) {
         return std::string(ipBuffer);
     } else {
-        std::cout << "Error converting IP address." << std::endl;
+        OutputHandler::getInstance()->print_to_cerr("Error converting IP address.");
         return "";  // Return an empty string or handle the error accordingly
     }
 }
 
 void printAckInfo(std::string src_ip, int src_port, int block_id) {
-    std::cerr << "ACK " << src_ip << ":" << src_port << " " << block_id << std::endl;
+    OutputHandler::getInstance()->print_to_cerr("ACK " + src_ip + ":" + std::to_string(src_port) + " " + std::to_string(block_id));
 }
 
 void printDataInfo(std::string src_ip, int src_port, int dst_port, int block_id) {
-    std::cerr << "DATA " << src_ip << ":" << src_port << ":" << dst_port << " " << block_id << std::endl;
+    OutputHandler::getInstance()->print_to_cerr("DATA " + src_ip + ":" + std::to_string(src_port) + ":" + std::to_string(dst_port) + " " + std::to_string(block_id));
 }
 
 void printErrorInfo(std::string src_ip, int src_port, int dst_port, unsigned short error_code, std::string error_msg) {
-    std::cerr << "ERROR " << src_ip << ":" << src_port << ":" << dst_port << " " << error_code << " \"" << error_msg  << "\""<< std::endl;
+    OutputHandler::getInstance()->print_to_cerr("ERROR " + src_ip + ":" + std::to_string(src_port) + ":" + std::to_string(dst_port) + " " + std::to_string(error_code) + " \"" + error_msg  + "\"");
 }
 
 void printOackInfo(std::string src_ip, int src_port, std::string options) {
-    std::cerr << "OACK " << src_ip << ":" << src_port << options << std::endl;
+    OutputHandler::getInstance()->print_to_cerr("OACK " + src_ip + ":" + std::to_string(src_port) + " " + options);
 }
 
 void printRrqWrqInfo(int opcode, std::string src_ip, int src_port, std::string filepath, std::string mode, std::string options) {
@@ -123,7 +122,7 @@ void printRrqWrqInfo(int opcode, std::string src_ip, int src_port, std::string f
     {
         return;
     }
-    std::cerr << output_opcode << src_ip << ":" << src_port << " \"" << filepath << "\" " << mode << options << std::endl;
+    OutputHandler::getInstance()->print_to_cerr(output_opcode + src_ip + ":" + std::to_string(src_port) + " \"" + filepath + "\" " + mode + options);
 }
 
 int getLocalPort(int udpSocket) {
@@ -149,7 +148,7 @@ int setTimeout(int *udp_socket, int seconds)
 int resendData(int udp_socket, sockaddr_in destination, std::vector<char> data)
 {
     if (sendto(udp_socket, data.data(), data.size(), 0, (struct sockaddr*)&destination, sizeof(destination)) == -1) {
-        std::cout << "Error while resending the message:" << errno << std::endl;
+        OutputHandler::getInstance()->print_to_cerr("Error while resending the message:" + std::to_string(errno));
         return -1;
     }
 
@@ -164,7 +163,7 @@ void clean(std::ofstream *file, std::string file_path)
     }
 
     if (remove(file_path.c_str()) != 0) {
-        std::cerr << "Error deleting file." << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error deleting file.");
     }
 }
 
@@ -187,7 +186,7 @@ int isEnoughSpace(std::string root_dirpath, int64_t tsize)
 
     if (statvfs(root_dirpath.c_str(), &stat) != 0) {
         // error happens, just quits here
-        std::cerr << "Failed to get disk space: " << errno << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Failed to get disk space: " + std::to_string(errno));
         return -1;
     }
 

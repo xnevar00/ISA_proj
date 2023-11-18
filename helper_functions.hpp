@@ -10,6 +10,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <sys/statvfs.h>
+#include "output_handler/output_handler.hpp"
 
 #define IPADDRLEN 16
 #define MINPORTVALUE 1

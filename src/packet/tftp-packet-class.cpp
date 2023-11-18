@@ -34,12 +34,12 @@ std::pair<TFTPPacket *, int> TFTPPacket::parsePacket(std::string receivedMessage
     int ok = packet->parse(receivedMessage);
     if(ok == -1)
     {
-        std::cout << "chyba parsovani packetu" << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error in packet parsing.");
         return {nullptr, -1};
     }
     if (ok == -2)
     {
-        std::cout << "chyba parsovani packetu" << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error in packet parsing.");
         return {nullptr, -2};
     }
         switch(opcode){
@@ -77,7 +77,7 @@ int TFTPPacket::sendAck(int block_number, int udp_socket, sockaddr_in addr, std:
 
 int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number, int client_port)
 {
-    std::cout << "Waiting for ACK packet..." << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Waiting for ACK packet...");
     char received_data[65507];
     struct sockaddr_in addr;
     socklen_t addrLen = sizeof(addr);
@@ -87,7 +87,7 @@ int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number, int clie
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return -3;
         } else {
-            std::cerr << "Error in recvfrom: " << strerror(errno) << std::endl;
+            OutputHandler::getInstance()->print_to_cout("Error in recvfrom: " + std::string(strerror(errno)));
             close(udp_socket);
         }
     }
@@ -98,7 +98,7 @@ int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number, int clie
     }
 
     std::string received_message(received_data, bytesRead);
-    std::cout << "Received ACK packet." << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Received ACK packet.");
     if (bytesRead < 4)
     {
         //TODO error packet
@@ -128,13 +128,13 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
     struct sockaddr_in tmpClientAddr;
     socklen_t tmpClientAddrLen = sizeof(tmpClientAddr);
 
-    std::cout << "Waiting for DATA packet..." << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Waiting for DATA packet...");
     int bytesRead = recvfrom(udp_socket, received_data, sizeof(received_data), 0, (struct sockaddr*)&tmpClientAddr, &tmpClientAddrLen);
     if (bytesRead == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return -3;
         } else {
-            std::cerr << "Error in recvfrom: " << strerror(errno) << std::endl;
+            OutputHandler::getInstance()->print_to_cout("Error in recvfrom: " + std::string(strerror(errno)));
             close(udp_socket);
         }
     }
@@ -169,7 +169,7 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
     }
     if (packet->blknum != block_number)
     {
-        std::cout << "Wrong block number!" << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Wrong block number!");
         return -1;
     }
     if (packet->data.size() > (long unsigned)block_size)
@@ -234,7 +234,7 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
 int TFTPPacket::sendData(int udp_socket, sockaddr_in addr, int block_number, int block_size, int bytes_read, std::vector<char> data, bool *last_packet, std::vector<char> *last_data)
 {
     if (bytes_read < 0) {
-        std::cout << "Error reading from stdin." << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error reading from stdin.");
         return -1;
     }
 
@@ -248,7 +248,7 @@ int TFTPPacket::sendData(int udp_socket, sockaddr_in addr, int block_number, int
     DATAPacket response_packet(block_number, data);
     if (response_packet.send(udp_socket, addr, last_data) == -1)
     {
-        std::cout << "Error sending DATA packet." << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error sending DATA packet.");
         return -1;
     }
     return 0;
@@ -286,18 +286,16 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
     filename = getSingleArgument(filenameIndex, receivedMessage);
     if (filename == "")
     {
-        //TODO error packet
-        std::cout << "CHYBA1" << std::endl;
+        OutputHandler::getInstance()->print_to_cout("CHYBA1");
         return -1;
     }
     int modeIndex = getAnotherStartIndex(filenameIndex, receivedMessage);
     mode = getSingleArgument(modeIndex, receivedMessage);
     std::transform(mode.begin(), mode.end(), mode.begin(), ::tolower);
-    std::cout << "Mode: " << mode << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Mode: " + mode);
     if (mode != "netascii" && mode != "octet")
     {
-        //TODO error packet
-        std::cout << "CHYBA2" << std::endl;
+        OutputHandler::getInstance()->print_to_cout("CHYBA2");
         return -1;
     }
 
@@ -309,13 +307,12 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
         std::transform(option.begin(), option.end(), option.begin(), ::tolower);
         if (option == "")
         {
-            std::cout << "CHYBA6" << std::endl;
+            OutputHandler::getInstance()->print_to_cout("CHYBA6");
             return -2;
         }
         if (optionIndex == -1)
         {
-            //TODO error packet
-            std::cout << "CHYBA3" << std::endl;
+            OutputHandler::getInstance()->print_to_cout("CHYBA3");
             return -2;
         } else if (option == "blksize")
         {
@@ -324,12 +321,11 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
                 options_string += " blksize";
                 if (setOption(&blksize, &optionIndex, receivedMessage, &options_string) == -1)
                 {
-                    std::cout << "CHYBA6" << std::endl;
+                    OutputHandler::getInstance()->print_to_cout("CHYBA6");
                     return -2;
                 }
             } else {
-                //TODO error packet
-                std::cout << "CHYBA4" << std::endl;
+                OutputHandler::getInstance()->print_to_cout("CHYBA4");
                 return -2;
             }
         } else if (option == "timeout")
@@ -339,12 +335,11 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
                 options_string += " timeout";
                 if (setOption(&timeout, &optionIndex, receivedMessage, &options_string) == -1)
                 {
-                    std::cout << "CHYBA6" << std::endl;
+                    OutputHandler::getInstance()->print_to_cout("CHYBA6");
                     return -2;
                 }
             } else {
-                //TODO error packet
-                std::cout << "CHYBA5" << std::endl;
+                OutputHandler::getInstance()->print_to_cout("CHYBA5");
                 return -2;
             }
         } else if (option == "tsize")
@@ -354,12 +349,11 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
                 options_string += " tsize";
                 if(setOption(&tsize, &optionIndex, receivedMessage, &options_string) == -1)
                 {
-                    std::cout << "CHYBA6" << std::endl;
+                    OutputHandler::getInstance()->print_to_cout("CHYBA6");
                     return -2;
                 }
             } else {
-                //TODO error packet
-                std::cout << "CHYBA6" << std::endl;
+                OutputHandler::getInstance()->print_to_cout("CHYBA6");
                 return -2;
             }
         } else {
@@ -367,15 +361,15 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
             optionIndex = getAnotherStartIndex(optionIndex, receivedMessage);
             if (optionIndex == -1)
             {
-                std::cout << "CHYBA7" << std::endl;
+                OutputHandler::getInstance()->print_to_cout("CHYBA7");
                 return -2;
             }
-            std::cout << "ignoring this option" << std::endl;
+            OutputHandler::getInstance()->print_to_cout("Ignoring an option since it is not supported.");
         }
         optionIndex = getAnotherStartIndex(optionIndex, receivedMessage);
 
     }
-    std::cout << "RRQ/WRQ packet parsed." << std::endl;
+    OutputHandler::getInstance()->print_to_cout("RRQ/WRQ packet parsed.");
     return 0;
 }
 
@@ -414,12 +408,12 @@ int RRQWRQPacket::send(int udpSocket, sockaddr_in destination, std::vector<char>
         message.push_back('\0');
     }
     if (sendto(udpSocket, message.data(), message.size(), 0, (struct sockaddr*)&destination, sizeof(destination)) == -1) {
-        std::cout << "Chyba při odesílání broadcast zprávy: " << strerror(errno) << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Chyba při odesílání broadcast zprávy: " + std::string(strerror(errno)));
         close(udpSocket);
         return -1;
     }
     *last_data = message;
-    std::cout << "RRQ packet sent." << std::endl;
+    OutputHandler::getInstance()->print_to_cout("RRQ packet sent.");
     return 0;
 }
 
@@ -439,20 +433,18 @@ int DATAPacket::parse(std::string receivedMessage) {
     opcode = getOpcode(receivedMessage);
     std::string block_number_str = receivedMessage.substr(2, 2);
     blknum = (static_cast<unsigned char>(block_number_str[0]) << 8) | static_cast<unsigned char>(block_number_str[1]);
-    std::cout << "Received data with block number: " << blknum << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Received data with block number: " + std::to_string(blknum));
 
     std::string data_string = receivedMessage.substr(4);
     std::vector<char> data_char(data_string.begin(), data_string.end());
     data = data_char;
 
-    std::cout << "DATA packet parsed." << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Data packet parsed.");
     return 0;
 }
 
 int DATAPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> *last_data) const {
     std::vector<char> message;
-    //message.push_back('0');
-    //message.push_back(std::to_string(opcode)[0]);
     std::vector<char> opcode = intToBytes(this->opcode);
     message.insert(message.end(), opcode.begin(), opcode.end()); //opcode
     std::vector<char> block_number = intToBytes(blknum);
@@ -460,12 +452,12 @@ int DATAPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> *
     message.insert(message.end(), data.begin(), data.end()); //mode
 
     if (sendto(udpSocket, message.data(), message.size(), 0, (struct sockaddr*)&destination, sizeof(destination)) == -1) {
-        std::cout << "Chyba při odesílání broadcast zprávy DATA packet: " << strerror(errno) << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error sending DATA packet: " + std::string(strerror(errno)));
         close(udpSocket);
         return -1;
     }
     *last_data = message;
-    std::cout << "DATA packet sent." << std::endl;
+    OutputHandler::getInstance()->print_to_cout("DATA packet sent.");
     return 0;
 }
 
@@ -484,7 +476,7 @@ int ACKPacket::parse(std::string receivedMessage){
     std::string block_number_str = receivedMessage.substr(2, 2);
     blknum = (static_cast<unsigned char>(block_number_str[0]) << 8) | static_cast<unsigned char>(block_number_str[1]);
 
-    std::cout << "ACK packet parsed" << std::endl;
+    OutputHandler::getInstance()->print_to_cout("ACK packet parsed.");
     return 0;
 }
 
@@ -499,12 +491,12 @@ int ACKPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> *l
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return -3;
         } else {
-            std::cerr << "Error in recvfrom: " << strerror(errno) << std::endl;
+            OutputHandler::getInstance()->print_to_cout("Error in recvfrom: " + std::string(strerror(errno)));
             close(udpSocket);
         }
     }
     *last_data = message;
-    std::cout << "ACK packet sent." << std::endl;
+    OutputHandler::getInstance()->print_to_cout("ACK packet sent.");
     return 0;
 }
 
@@ -519,7 +511,7 @@ OACKPacket::OACKPacket(unsigned short blknum, bool blocksize_set, int blocksize,
 }
 
 int OACKPacket::parse(std::string receivedMessage) {
-    std::cout << "OACKPacket parsing\n";
+    OutputHandler::getInstance()->print_to_cout("OACKPacket parsing");
     if ((receivedMessage.length() < 2) || (receivedMessage[2] >= '0' && receivedMessage[2] <= '9' && receivedMessage[3] >= '0' && receivedMessage[3] <= '9'))
     {
         return -1;
@@ -533,8 +525,7 @@ int OACKPacket::parse(std::string receivedMessage) {
         option = getSingleArgument(optionIndex, receivedMessage);
         if (optionIndex == -1)
         {
-            //TODO error packet
-            std::cout << "CHYBA" << std::endl;
+            OutputHandler::getInstance()->print_to_cout("CHYBA");
             return -1;
         } else if (option == "blksize")
         {
@@ -543,8 +534,7 @@ int OACKPacket::parse(std::string receivedMessage) {
             {
                 setOption(&blksize, &optionIndex, receivedMessage, &options_string);
             } else {
-                //TODO error packet
-                std::cout << "CHYBA" << std::endl;
+                OutputHandler::getInstance()->print_to_cout("CHYBA");
                 return -1;
             }
         } else if (option == "timeout")
@@ -554,8 +544,7 @@ int OACKPacket::parse(std::string receivedMessage) {
             {
                 setOption(&timeout, &optionIndex, receivedMessage, &options_string);
             } else {
-                //TODO error packet
-                std::cout << "CHYBA" << std::endl;
+                OutputHandler::getInstance()->print_to_cout("CHYBA");
                 return -1;
             }
         } else if (option == "tsize")
@@ -565,55 +554,25 @@ int OACKPacket::parse(std::string receivedMessage) {
             {
                 setOption(&tsize, &optionIndex, receivedMessage, &options_string);
             } else {
-                //TODO error packet
-                std::cout << "CHYBA" << std::endl;
+                OutputHandler::getInstance()->print_to_cout("CHYBA");
                 return -1;
             }
         } else {
-            //TODO error packet
-            std::cout << "CHYBA" << std::endl;
+            OutputHandler::getInstance()->print_to_cout("CHYBA");
             return -1;
         }
         optionIndex = getAnotherStartIndex(optionIndex, receivedMessage);
 
     }
-    std::cout << "OACK packet parsed." << std::endl;
+    OutputHandler::getInstance()->print_to_cout("OACK packet parsed.");
     return 0;
 }
-
-/*std::string OACKPacket::create(Session* session) const {
-    std::cout << "RRQWRQPacket creating\n";
-    std::string response = "06";
-    if (session->blksize_set == true)
-    {
-        response += "blksize";
-        response += '\0';
-        response += std::to_string(session->blksize);
-        response += '\0';
-    }
-    if (session->timeout != 1)
-    {
-        response += "timeout";
-        response += '\0';
-        response += std::to_string(session->timeout);
-        response += '\0';
-    }
-    if (session->tsize != 1)
-    {
-        response += "tsize";
-        response += '\0';
-        response += std::to_string(session->tsize);
-        response += '\0';
-    }
-    return response;
-}*/
 
 int OACKPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> *last_data) const {
     std::vector<char> message;
     std::vector<char> opcode = intToBytes(this->opcode);
     message.insert(message.end(), opcode.begin(), opcode.end()); //opcode
-    //message.push_back('0');
-    //message.push_back(std::to_string(opcode)[0]);
+
     if (blksize_set == true)
     {
         std::string blksize_str = std::to_string(blksize);
@@ -640,12 +599,12 @@ int OACKPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> *
     }
 
     if (sendto(udpSocket, message.data(), message.size(), 0, (struct sockaddr*)&destination, sizeof(destination)) == -1) {
-        std::cout << "Chyba při odesílání broadcast zprávy OACK packet: " << strerror(errno) << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error sending OACK packet: " + std::string(strerror(errno)));
         close(udpSocket);
         return -1;
     }
     *last_data = message;
-    std::cout << "OACK packet sent." << std::endl;
+    OutputHandler::getInstance()->print_to_cout("OACK packet sent.");
     return 0;
 }
 
@@ -666,7 +625,7 @@ int ERRORPacket::parse(std::string receivedMessage){
     this->error_code = (static_cast<unsigned char>(error_code_str[0]) << 8) | static_cast<unsigned char>(error_code_str[1]); 
     this->error_message = receivedMessage.substr(4);
 
-    std::cout << "ERROR packet parsed." << std::endl;
+    OutputHandler::getInstance()->print_to_cout("ERROR packet parsed.");
     return 0;
 }
 
@@ -679,7 +638,7 @@ int ERRORPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> 
     message.insert(message.end(), this->error_message.begin(), this->error_message.end());
 
     if (sendto(udpSocket, message.data(), message.size(), 0, (struct sockaddr*)&destination, sizeof(destination)) == -1) {
-        std::cout << "Chyba při odesílání broadcast zprávy ERROR packet: " << strerror(errno) << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error sending ERROR packet: " + std::string(strerror(errno)));
         close(udpSocket);
         return -1;
     }
@@ -687,6 +646,6 @@ int ERRORPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> 
     {
         *last_data = message;
     }
-    std::cout << "ERROR packet sent: " << this->error_code << std::endl;
+    OutputHandler::getInstance()->print_to_cout("ERROR packet sent.");
     return 0;
 }

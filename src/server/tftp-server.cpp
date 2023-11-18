@@ -22,15 +22,15 @@ int main(int argc, char* argv[]) {
     int ok = server->parse_arguments(argc, argv, server);
     if (ok != StatusCode::SUCCESS)
     {
-        std::cout << "Chyba v zadani argumentu" << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Invalid format of arguments.");
         return ok;
     } else {
-        std::cout << "Všechno je v pořádku" << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Arguments ok.");
     }
     ok = server->listen(server);
     if (ok != StatusCode::SUCCESS)
     {
-        std::cout << "Chyba pri inicializaci socketu" << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error creating socket.");
         return ok;
     }
     return StatusCode::SUCCESS;

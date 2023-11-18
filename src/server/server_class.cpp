@@ -1,13 +1,13 @@
 #include <iostream>
 #include "../../include/server/server_class.hpp"
-#include <arpa/inet.h>  // pro inet_ntoa
+#include <arpa/inet.h>
 
 namespace fs = std::filesystem;
 
 std::atomic<bool> terminateThreads(false);
 
 void signalHandler(int signal) {
-    std::cout << "Signal " << signal << " received." << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Signal " + std::to_string(signal) + " received.");
     terminateThreads = true;
 }
 
@@ -72,8 +72,8 @@ int Server::parse_arguments(int argc, char* argv[], Server *server)
 
     server->root_dirpath = argv[optind];
 
-    std::cout << "Port: " << server->port << std::endl;
-    std::cout << "Directory: " << server->root_dirpath << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Port:" + std::to_string(server->port));
+    OutputHandler::getInstance()->print_to_cout("Directory:" + server->root_dirpath);
 
     return StatusCode::SUCCESS;
 }
@@ -85,7 +85,7 @@ int Server::listen(Server *server)
         return udpSocket;
     }
 
-    std::cout << "Listening... " << strerror(errno) << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Listening...");
     server_loop(udpSocket);
 
     close(udpSocket);
@@ -97,7 +97,7 @@ int Server::create_udp_socket() {
     int udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
 
     if (udpSocket == -1) {
-        std::cout << "Chyba při vytváření socketu: " << strerror(errno) << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error creating UDP socket.");
         return StatusCode::SOCKET_ERROR;
     }
     return udpSocket;
@@ -111,7 +111,7 @@ int Server::setup_udp_socket(int udpSocket, Server *server){
     serverAddr.sin_addr.s_addr = htonl(INADDR_ANY); // Adresa "0.0.0.0"
 
     if (bind(udpSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
-        std::cout << "Chyba při bind: " << strerror(errno) << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error establishing connection.");
         close(udpSocket);
         return StatusCode::CONNECTION_ERROR;
     }
@@ -134,7 +134,7 @@ int Server::initialize_connection(Server *server)
 
 int Server::respond_to_client(int udpSocket, const char* message, size_t messageLength, struct sockaddr_in* clientAddr, socklen_t clientAddrLen) {
     if (sendto(udpSocket, message, messageLength, 0, (struct sockaddr*)clientAddr, clientAddrLen) == -1) {
-        std::cout << "Chyba při odesílání odpovědi: " << strerror(errno) << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error sending response: " + std::string(strerror(errno)));
         return StatusCode::CONNECTION_ERROR;
     }
     return StatusCode::SUCCESS;
@@ -154,7 +154,7 @@ void Server::server_loop(int udpSocket) {
     tv.tv_sec = 0;
     tv.tv_usec = 100000;
     if (setsockopt(udpSocket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
-    std::cerr << "Error setting socket options: " << strerror(errno) << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error setting socket options: " + std::string(strerror(errno)));
     }
 
     while (true && !terminateThreads) {
@@ -163,7 +163,7 @@ void Server::server_loop(int udpSocket) {
             if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
                 // Timeout, check if we should terminate
                 if (terminateThreads) {
-                    std::cout << "Terminating the server." << std::endl;
+                    OutputHandler::getInstance()->print_to_cout("Terminating the server.");
                     for (auto& future : futures_vector) {
                         future.get();
                     }
@@ -174,15 +174,15 @@ void Server::server_loop(int udpSocket) {
                 }), futures_vector.end());
                 continue;
             } else {
-                std::cout << "Error waiting for message: " << strerror(errno) << std::endl;
+                OutputHandler::getInstance()->print_to_cout("Error waiting for message: " + std::string(strerror(errno)));
                 continue;
             }
         }
 
-        std::cout << "New client!" << std::endl;
+        OutputHandler::getInstance()->print_to_cout("New client!");
         ClientHandler *clientHandlerObj = new ClientHandler();
         std::string receivedMessage(buffer, bytesRead);
-        std::cout << "Just received message: " << receivedMessage << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Just received message: " + receivedMessage);
         auto future = std::async(std::launch::async, &ClientHandler::handleClient, clientHandlerObj, receivedMessage, bytesRead, clientAddr, root_dirpath);
         futures_vector.push_back(std::move(future));
     }
@@ -227,12 +227,12 @@ void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, soc
         switch (packet->opcode){
             case Opcode::RRQ:
                 direction = Direction::Download;
-                std::cout << "RRQ packet" << std::endl;
+                OutputHandler::getInstance()->print_to_cout("RRQ packet");
                 handlePacket(packet);
                 break;
             case Opcode::WRQ:
                 direction = Direction::Upload;
-                std::cout << "WRQ packet" << std::endl;
+                OutputHandler::getInstance()->print_to_cout("WRQ packet");
                 handlePacket(packet);
                 break;
             default:
@@ -301,7 +301,7 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
                 }
             } else
             {
-                std::cout << "Illegal tsize value" << std::endl;
+                OutputHandler::getInstance()->print_to_cout("Illegal tsize value");
                 TFTPPacket::sendError(udpSocket, clientAddr, 8, "Illegal option value.");
                 return;
             }
@@ -310,7 +310,7 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
 
     setTimeout(&udpSocket, timeout);
     
-    std::cout << "Handling packet" << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Handling packet.");
     if (direction == Direction::Upload)
     {
         if (setupFileForUpload() == -1)
@@ -332,7 +332,7 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
         OACKPacket OACK_response_packet(block_number, block_size_set, block_size, timeout, tsize);
         if (OACK_response_packet.send(udpSocket, clientAddr, &last_data) == -1)
         {
-            std::cout << "Error sending OACK packet." << std::endl;
+            OutputHandler::getInstance()->print_to_cout("Error sending OACK packet.");
             return;
         }
 
@@ -372,7 +372,7 @@ int ClientHandler::createUdpSocket()
 {
     udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
     if (udpSocket == -1) {
-        std::cout << "Error creating UDP socket." << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error creating UDP socket.");
         return -1;
     }
 
@@ -387,7 +387,7 @@ int ClientHandler::createUdpSocket()
 
 
     if (bind(udpSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
-        std::cout << "Error establishing connection." << strerror(errno) << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error establishing connection.");
         close(udpSocket);
         return -1;
     }
@@ -399,7 +399,7 @@ int ClientHandler::createUdpSocket()
 
     int port = ntohs(localAddress.sin_port);
 
-    std::cout << "Serverovský socket běží na portu: " << port << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Server is running on port: " + std::to_string(port));
 
     return 0;
 }
@@ -410,23 +410,23 @@ int ClientHandler::receiveData()
     struct sockaddr_in tmpClientAddr;
     socklen_t tmpClientAddrLen = sizeof(tmpClientAddr);
 
-    std::cout << "cekam na data" << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Waiting for data.");
     int bytesRead = recvfrom(udpSocket, received_data, sizeof(received_data), 0, (struct sockaddr*)&tmpClientAddr, &tmpClientAddrLen);
     if (bytesRead == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            std::cout << "Recvfrom timed out." << std::endl;
+            OutputHandler::getInstance()->print_to_cout("Recvfrom timed out.");
             resendData(udpSocket, clientAddr, last_data);
             attempts_to_resend++;
             timeout *= 2;
             setTimeout(&udpSocket, timeout);
             if (attempts_to_resend > 5)
             {
-                std::cout << "Client is not responding." << std::endl;
+                OutputHandler::getInstance()->print_to_cout("Client is not responding.");
                 return -1;
             }
             return 0;
         } else {
-            std::cerr << "Error in recvfrom: " << strerror(errno) << std::endl;
+            OutputHandler::getInstance()->print_to_cout("Error waiting for message: " + std::string(strerror(errno)));
         }
     }
     if (getPort(tmpClientAddr) != clientPort)
@@ -436,7 +436,7 @@ int ClientHandler::receiveData()
     }
 
     std::string received_message(received_data, bytesRead);
-    std::cout << "Prijata zprava:" << received_message << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Received message:" + received_message);
     if (bytesRead < 4)
     {
         TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
@@ -476,12 +476,12 @@ int ClientHandler::receiveData()
 
 int ClientHandler::setupFileForDownload()
 {
-    std::cout << filename << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Setting up file for download.");
     full_filepath = root_dirpath + "/" + filename;
 
     if(!(fs::exists(full_filepath)))
     {
-        std::cout << "File not found." << std::endl;
+        OutputHandler::getInstance()->print_to_cout("File not found.");
         TFTPPacket::sendError(udpSocket, clientAddr, 1, "File not found.");
         return -1;
     }
@@ -497,28 +497,22 @@ int ClientHandler::setupFileForDownload()
 
 int ClientHandler::setupFileForUpload()
 {
-    /*if (filename.find('/') != std::string::npos) {
-        std::cout << "File not found." << std::endl;
-        TFTPPacket::sendError(udpSocket, clientAddr, 6, "File not found.");
-        return -1;
-    }*/
-
     full_filepath = root_dirpath + "/" + filename;
     if(fs::exists(full_filepath))
     {
-        std::cout << "File already exists." << std::endl;
+        OutputHandler::getInstance()->print_to_cout("File already exists.");
         TFTPPacket::sendError(udpSocket, clientAddr, 6, "File already exists.");
         return -1;
     }
          
     file.open(full_filepath, std::ios::binary | std::ios::out);
-    std::cout << "Filepath: " << full_filepath << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Filepath" + full_filepath);
 
     if (!(file).is_open()) {
         TFTPPacket::sendError(udpSocket, clientAddr, 2, "Access violation.");
         return -1;
     }
-    std::cout << "File opened." << std::endl;
+    OutputHandler::getInstance()->print_to_cout("File opened.");
     return 0;
 }
 
@@ -527,7 +521,7 @@ int ClientHandler::writeData(std::vector<char> data)
     file.write(data.data(), data.size());
     if (file.fail())
     {
-        std::cerr << "Error writing to file maybe because of not enough diskspace." << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Error writing to file maybe because of not enough diskspace.");
         TFTPPacket::sendError(udpSocket, clientAddr, 3, "Disk full or allocation exceeded.");
         return -1;
     }
@@ -632,7 +626,7 @@ int ClientHandler::transferFile()
                 ok = TFTPPacket::sendAck(block_number, udpSocket, clientAddr, &last_data);
                 if (ok == -1)
                 {
-                    std::cout << "Error sending ACK packet." << std::endl;
+                    OutputHandler::getInstance()->print_to_cout("Error sending ACK packet.");
                     return -1;
                 }
                 block_number++;
@@ -643,11 +637,11 @@ int ClientHandler::transferFile()
                 ok = TFTPPacket::receiveData(udpSocket, block_number, block_size, &(file), &(last_packet), clientPort, &r_flag, mode);
                 if (ok == -1)
                 {
-                    std::cout << "Illegal TFTP operation." << std::endl;
+                    OutputHandler::getInstance()->print_to_cout("Illegal TFTP operation.");
                     TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP Operation.");
                 } else if (ok == -2)
                 {
-                    std::cout << "Unknown transfer ID." << std::endl;
+                    OutputHandler::getInstance()->print_to_cout("Unknown transfer ID.");
                     current_state = TransferState::ReceiveData;
                     break;
                 } else if (ok == -3)
@@ -655,7 +649,7 @@ int ClientHandler::transferFile()
                     attempts_to_resend++;
                     if (attempts_to_resend <= MAXRESENDATTEMPTS)
                     {
-                        std::cout << "Resending ACK... (" << attempts_to_resend << ")"<< std::endl;
+                        OutputHandler::getInstance()->print_to_cout("Resending ACK... (" + std::to_string(attempts_to_resend) + ")");
                         resendData(udpSocket, clientAddr, last_data);
                     }
                     current_state = TransferState::ReceiveData;
@@ -665,7 +659,7 @@ int ClientHandler::transferFile()
                 }
                 attempts_to_resend = 0;
                 timeout = set_timeout_by_client;
-                std::cout << "setting timeout to " << timeout << std::endl;
+                OutputHandler::getInstance()->print_to_cout("Setting timeout to: " + std::to_string(timeout));
                 setTimeout(&udpSocket, timeout);
                 current_state = TransferState::SendAck;
                 break;
@@ -674,7 +668,7 @@ int ClientHandler::transferFile()
                 ok = handleSendingData();
                 if (ok == -1)
                 {
-                    std::cout << "Failed to send DATA packet" << std::endl;
+                    OutputHandler::getInstance()->print_to_cout("Error sending DATA packet.");
                     return -1;
                 }
                 current_state = TransferState::ReceiveAck;
@@ -684,7 +678,7 @@ int ClientHandler::transferFile()
                 ok = TFTPPacket::receiveAck(udpSocket, block_number, clientPort);
                 if (ok == -1)
                 {
-                    std::cout << "Illegal TFTP operation" << std::endl;
+                    OutputHandler::getInstance()->print_to_cout("Illegal TFTP operation.");
                     TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
                     return -1;
                 } else if (ok == -3)
@@ -692,12 +686,12 @@ int ClientHandler::transferFile()
                     attempts_to_resend++;
                     if (attempts_to_resend <= MAXRESENDATTEMPTS)
                     {
-                        std::cout << "Resending DATA... (" << attempts_to_resend << ")"<< std::endl;
+                        OutputHandler::getInstance()->print_to_cout("Resending DATA... (" + std::to_string(attempts_to_resend) + ")");
                         resendData(udpSocket, clientAddr, last_data);
                     }
                     current_state = TransferState::ReceiveAck;
                     timeout *= 2;
-                    std::cout << "setting timeout to " << timeout << std::endl;
+                    OutputHandler::getInstance()->print_to_cout("Setting timeout to: " + std::to_string(timeout));
                     setTimeout(&udpSocket, timeout);
                     break;
                 }
@@ -714,19 +708,19 @@ int ClientHandler::transferFile()
                 }
                 break;
             default:
-                std::cout << "Illegal TFTP operation" << std::endl;
+                OutputHandler::getInstance()->print_to_cout("Illegal TFTP operation");
                 TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
                 break;
         }
     }
     if (terminateThreads)
     {   
-        std::cout << "Ending thread because of SIGINT." << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Ending thread because of SIGINT.");
         return -1;
     }
     if (attempts_to_resend >= MAXRESENDATTEMPTS)
     {
-        std::cout << "Client is not responding, aborting." << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Client is not responding, aborting.");
         return -1;
     }
     if (direction == Direction::Upload)
@@ -734,7 +728,7 @@ int ClientHandler::transferFile()
         ok = TFTPPacket::sendAck(block_number, udpSocket, clientAddr, &last_data);
         if (ok == -1)
         {
-            std::cout << "Error sending ACK packet." << std::endl;
+            OutputHandler::getInstance()->print_to_cout("Error sending ACK packet.");
             return -1;
         }
         block_number++;
@@ -746,25 +740,25 @@ int ClientHandler::transferFile()
             ok = TFTPPacket::receiveAck(udpSocket, block_number, clientPort);
             if (ok == -1)
             {
-                std::cout << "Illegal TFTP operation." << std::endl;
+                OutputHandler::getInstance()->print_to_cout("Illegal TFTP operation.");
                 TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
                 return -1;
             } else if (ok == -3)
             {
                 attempts_to_resend++;
-                std::cout << "Resending DATA... (" << attempts_to_resend << ")"<< std::endl;
+                OutputHandler::getInstance()->print_to_cout("Resending DATA... (" + std::to_string(attempts_to_resend) + ")");
                 resendData(udpSocket, clientAddr, last_data);
                 timeout *= 2;
-                std::cout << "Setting timeout to: " << timeout << std::endl;
+                OutputHandler::getInstance()->print_to_cout("Setting timeout to: " + std::to_string(timeout));
                 setTimeout(&udpSocket, timeout);
             }
         }
         if (terminateThreads)
         {   
-            std::cout << "Ending thread because of SIGINT." << std::endl;
+            OutputHandler::getInstance()->print_to_cout("Ending thread because of SIGINT.");
             return -1;
         }
     }
-    std::cout << "Transfer finished" << std::endl;
+    OutputHandler::getInstance()->print_to_cout("Transfer finished");
     return 0;
 }

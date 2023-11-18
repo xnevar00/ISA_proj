@@ -22,10 +22,10 @@ int main(int argc, char* argv[]) {
     int ok = client->parse_arguments(argc, argv);
     if (ok == -1)
     {
-        std::cout << "Invalid format of arguments." << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Invalid format of arguments.");
         return -1;
     } else {
-        std::cout << "Arguments ok." << std::endl;
+        OutputHandler::getInstance()->print_to_cout("Arguments ok.");
     }
     ok = client->communicate();
     return ok;
