@@ -677,7 +677,10 @@ int ERRORPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> 
         close(udpSocket);
         return -1;
     }
-    *last_data = message;
+    if (last_data != nullptr)
+    {
+        *last_data = message;
+    }
     std::cout << "ERROR packet sent: " << this->error_code << std::endl;
     return 0;
 }

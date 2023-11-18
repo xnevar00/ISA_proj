@@ -16,7 +16,7 @@
 #include <algorithm>
 #include "../../include/packet/tftp-packet-class.hpp"
 
-void signalHandler(int signum);
+void signalHandler(int signal);
 
 void setupSignalHandler();
 

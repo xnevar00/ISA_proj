@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <cerrno>
 #include <cstdio>
+#include <sys/statvfs.h>
 
 #define IPADDRLEN 16
 #define MINPORTVALUE 1
@@ -67,3 +68,5 @@ int getPort(const struct sockaddr_in& sockaddr);
 int setTimeout(int *udp_socket, int seconds);
 int resendData(int udp_socket, sockaddr_in destination, std::vector<char> data);
 void clean(std::ofstream *file, std::string full_filepath);
+int getFileSize(std::string root_ditpath, std::string filepath);
+int isEnoughSpace(std::string root_dirpath, int64_t tsize);

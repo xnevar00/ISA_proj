@@ -6,7 +6,8 @@ namespace fs = std::filesystem;
 
 std::atomic<bool> terminateThreads(false);
 
-void signalHandler(int signum) {
+void signalHandler(int signal) {
+    std::cout << "Signal " << signal << " received." << std::endl;
     terminateThreads = true;
 }
 
@@ -261,11 +262,49 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
         timeout = packet->timeout;
     }
     tsize = packet->tsize;
+
     mode = packet->mode;
-    if ((packet->timeout > MAXTIMEOUTVALUE) || (packet->blksize < 8 && block_size_set == true) || (packet->blksize > MAXBLKSIZEVALUE) || (packet->tsize > MAXTSIZEVALUE))
+    if ((packet->timeout > MAXTIMEOUTVALUE) || (packet->blksize < 8 && block_size_set == true) || (packet->blksize > MAXBLKSIZEVALUE) || (packet->tsize > MAXTSIZEVALUE) || (packet->tsize < 0))
     {
         TFTPPacket::sendError(udpSocket, clientAddr, 8, "Illegal options.");
         return;
+    }
+
+    if (packet->tsize != -1)
+    {
+        if (direction == Direction::Upload)
+        {
+            int ok = isEnoughSpace(root_dirpath, packet->tsize);
+            if (ok == 0)
+            {
+                TFTPPacket::sendError(udpSocket, clientAddr, 3, "Disk full or allocation exceeded.");
+                return;
+            } else if (ok == -1)
+            {
+                TFTPPacket::sendError(udpSocket, clientAddr, 0, "Error getting the available disk space.");
+                return;
+            }
+        } else if (direction == Direction::Download)
+        {
+            if (packet->tsize == 0)
+            {
+                tsize = getFileSize(root_dirpath, filename);
+                if (tsize == -1)
+                {
+                    TFTPPacket::sendError(udpSocket, clientAddr, 1, "File not found.");
+                    return;
+                } else if (tsize > MAXTSIZEVALUE)
+                {
+                    TFTPPacket::sendError(udpSocket, clientAddr, 3, "Disk full or allocation exceeded.");
+                    return;
+                }
+            } else
+            {
+                std::cout << "Illegal tsize value" << std::endl;
+                TFTPPacket::sendError(udpSocket, clientAddr, 8, "Illegal option value.");
+                return;
+            }
+        }
     }
 
     setTimeout(&udpSocket, timeout);

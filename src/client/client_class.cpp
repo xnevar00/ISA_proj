@@ -18,7 +18,7 @@ Client *Client::getInstance()
         client_->block_number = 0;
         client_->block_size = 1021;
         client_->timeout = 2;
-        client_->tsize = 10;
+        client_->tsize = 0;
         client_->current_state = TransferState::WaitForTransfer;
         client_->mode = "octet";
         client_->r_flag = false;

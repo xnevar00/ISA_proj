@@ -161,3 +161,36 @@ void clean(std::ofstream *file, std::string file_path)
         std::cerr << "Error deleting file." << std::endl;
     }
 }
+
+int getFileSize(std::string root_ditpath, std::string filepath)
+{
+    std::string full_filepath = root_ditpath + "/" + filepath;
+    std::ifstream file(full_filepath, std::ios::binary | std::ios::ate);
+    if (!file.is_open())
+    {
+        return -1;
+    }
+    int size = file.tellg();
+    file.close();
+    return size;
+}
+
+int isEnoughSpace(std::string root_dirpath, int64_t tsize)
+{
+    struct statvfs stat;
+
+    if (statvfs(root_dirpath.c_str(), &stat) != 0) {
+        // error happens, just quits here
+        std::cerr << "Failed to get disk space: " << errno << std::endl;
+        return -1;
+    }
+
+    // the available size is f_bsize * f_bavail
+    uint64_t available = stat.f_bsize * stat.f_bavail;
+
+    if (available >= static_cast<uint64_t>(tsize)) {
+        return 1;  // Enough space
+    } else {
+        return 0;  // Not enough space
+    }
+}
