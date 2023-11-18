@@ -172,6 +172,11 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
         std::cout << "Wrong block number!" << std::endl;
         return -1;
     }
+    if (packet->data.size() > (long unsigned)block_size)
+    {
+        TFTPPacket::sendError(udp_socket, tmpClientAddr, 4, "Illegal TFTP operation.");
+        return -1;
+    }
 
     if ((unsigned short int)packet->data.size() < block_size)
     {
@@ -287,6 +292,7 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
     }
     int modeIndex = getAnotherStartIndex(filenameIndex, receivedMessage);
     mode = getSingleArgument(modeIndex, receivedMessage);
+    std::transform(mode.begin(), mode.end(), mode.begin(), ::tolower);
     std::cout << "Mode: " << mode << std::endl;
     if (mode != "netascii" && mode != "octet")
     {

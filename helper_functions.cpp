@@ -63,7 +63,13 @@ int setOption(int64_t *option, int *optionIndex, std::string receivedMessage, st
         return -1;
     } else
     {
-        *option = std::stoll(option_str);;
+        if (option_str.length() > 19)
+        {
+            *option = MAXTSIZEVALUE + 1;
+        } else
+        {
+            *option = std::stoll(option_str);
+        }
         *options_string += "=" + option_str;
         return 0;
     }

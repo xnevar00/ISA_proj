@@ -354,6 +354,8 @@ int Client::transferFile()
                     break;
                 }
                 attempts_to_resend = 0;
+                timeout = INITIALTIMEOUT;
+                setTimeout(&udpSocket, timeout);
                 current_state = TransferState::SendAck;
                 break;
 
@@ -388,6 +390,8 @@ int Client::transferFile()
                     break;
                 }
                 attempts_to_resend = 0;
+                timeout = INITIALTIMEOUT;
+                setTimeout(&udpSocket, timeout);
                 current_state = TransferState::SendData;
                 break;
             case TransferState::SendError:
@@ -408,8 +412,12 @@ int Client::transferFile()
                 return -1;
             } else if (ok == -3)
             {
-                std::cout << "Resending DATA..." << std::endl;
+                attempts_to_resend++;
+                std::cout << "Resending DATA... (" << attempts_to_resend << ")"<< std::endl;
                 resendData(udpSocket, serverAddr, last_data);
+                timeout *= 2;
+                std::cout << "Setting timeout to: " << timeout << std::endl;
+                setTimeout(&udpSocket, timeout);
             }
         }
     } else 

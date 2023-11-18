@@ -72,9 +72,10 @@ class ClientHandler {
         std::vector<char> last_data;
         int attempts_to_resend;
         std::string full_filepath;
+        int64_t set_timeout_by_client;
 
-        ClientHandler() : current_state(TransferState::WaitForTransfer), clientPort(-1), clientIP(""), direction(-1), block_number(0), tsize(-1), timeout(2), block_size(512), block_size_set(false), last_packet(false),
-                          root_dirpath(""), udpSocket(-1), r_flag(false), overflow(""), attempts_to_resend(0), full_filepath("") {}
+        ClientHandler() : current_state(TransferState::WaitForTransfer), clientPort(-1), clientIP(""), direction(-1), block_number(0), tsize(-1), timeout(INITIALTIMEOUT), block_size(512), block_size_set(false), last_packet(false),
+                          root_dirpath(""), udpSocket(-1), r_flag(false), overflow(""), attempts_to_resend(0), full_filepath(""), set_timeout_by_client(INITIALTIMEOUT) {}
 
         void handleClient(std::string receivedMessage, int bytesRead, sockaddr_in clientAddr, std::string root_dirpath);
         void handlePacket(TFTPPacket *packet);

@@ -260,11 +260,12 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
     if (packet->timeout != -1)  //uf not set in rrq/wrq, remain default (5)
     {
         timeout = packet->timeout;
+        set_timeout_by_client = packet->timeout;
     }
     tsize = packet->tsize;
 
     mode = packet->mode;
-    if ((packet->timeout > MAXTIMEOUTVALUE) || (packet->blksize < 8 && block_size_set == true) || (packet->blksize > MAXBLKSIZEVALUE) || (packet->tsize > MAXTSIZEVALUE) || (packet->tsize < 0))
+    if ((packet->timeout > MAXTIMEOUTVALUE) || (packet->blksize < 8 && block_size_set == true) || (packet->blksize > MAXBLKSIZEVALUE) || (packet->tsize > MAXTSIZEVALUE) || (packet->tsize < -1))
     {
         TFTPPacket::sendError(udpSocket, clientAddr, 8, "Illegal options.");
         return;
@@ -325,7 +326,8 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
             return;
         }
     }
-    if (block_size_set == true || timeout != -1 || tsize != -1)
+
+    if (block_size_set == true || packet->timeout != -1 || packet->tsize != -1)
     {
         OACKPacket OACK_response_packet(block_number, block_size_set, block_size, timeout, tsize);
         if (OACK_response_packet.send(udpSocket, clientAddr, &last_data) == -1)
@@ -480,7 +482,7 @@ int ClientHandler::setupFileForDownload()
     if(!(fs::exists(full_filepath)))
     {
         std::cout << "File not found." << std::endl;
-        TFTPPacket::sendError(udpSocket, clientAddr, 6, "File not found.");
+        TFTPPacket::sendError(udpSocket, clientAddr, 1, "File not found.");
         return -1;
     }
 
@@ -495,11 +497,11 @@ int ClientHandler::setupFileForDownload()
 
 int ClientHandler::setupFileForUpload()
 {
-    if (filename.find('/') != std::string::npos) {
-        std::cout << "Acces violation." << std::endl;
-        TFTPPacket::sendError(udpSocket, clientAddr, 2, "Access violation.");
+    /*if (filename.find('/') != std::string::npos) {
+        std::cout << "File not found." << std::endl;
+        TFTPPacket::sendError(udpSocket, clientAddr, 6, "File not found.");
         return -1;
-    }
+    }*/
 
     full_filepath = root_dirpath + "/" + filename;
     if(fs::exists(full_filepath))
@@ -662,6 +664,9 @@ int ClientHandler::transferFile()
                     break;
                 }
                 attempts_to_resend = 0;
+                timeout = set_timeout_by_client;
+                std::cout << "setting timeout to " << timeout << std::endl;
+                setTimeout(&udpSocket, timeout);
                 current_state = TransferState::SendAck;
                 break;
             case TransferState::SendData:
@@ -692,10 +697,13 @@ int ClientHandler::transferFile()
                     }
                     current_state = TransferState::ReceiveAck;
                     timeout *= 2;
+                    std::cout << "setting timeout to " << timeout << std::endl;
                     setTimeout(&udpSocket, timeout);
                     break;
                 }
                 attempts_to_resend = 0;
+                timeout = set_timeout_by_client;
+                setTimeout(&udpSocket, timeout);
                 if (last_packet == true)
                 {
                     current_state = TransferState::WaitForTransfer;
@@ -716,7 +724,7 @@ int ClientHandler::transferFile()
         std::cout << "Ending thread because of SIGINT." << std::endl;
         return -1;
     }
-    if (attempts_to_resend >= 5)
+    if (attempts_to_resend >= MAXRESENDATTEMPTS)
     {
         std::cout << "Client is not responding, aborting." << std::endl;
         return -1;
@@ -733,19 +741,28 @@ int ClientHandler::transferFile()
     } else 
     {        
         ok = -1;
-        while(ok != 0 && attempts_to_resend < 5)
+        while(ok != 0 && attempts_to_resend < MAXRESENDATTEMPTS && !terminateThreads)
         {   
             ok = TFTPPacket::receiveAck(udpSocket, block_number, clientPort);
             if (ok == -1)
             {
-                std::cout << "Illegal TFTP operation" << std::endl;
+                std::cout << "Illegal TFTP operation." << std::endl;
                 TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
                 return -1;
             } else if (ok == -3)
             {
-                std::cout << "Resending DATA..." << std::endl;
+                attempts_to_resend++;
+                std::cout << "Resending DATA... (" << attempts_to_resend << ")"<< std::endl;
                 resendData(udpSocket, clientAddr, last_data);
+                timeout *= 2;
+                std::cout << "Setting timeout to: " << timeout << std::endl;
+                setTimeout(&udpSocket, timeout);
             }
+        }
+        if (terminateThreads)
+        {   
+            std::cout << "Ending thread because of SIGINT." << std::endl;
+            return -1;
         }
     }
     std::cout << "Transfer finished" << std::endl;

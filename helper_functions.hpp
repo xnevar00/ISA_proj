@@ -18,6 +18,7 @@
 #define MAXBLKSIZEVALUE 65464
 #define MAXTIMEOUTVALUE 255
 #define MAXRESENDATTEMPTS 4
+#define INITIALTIMEOUT 2
 
 enum Opcode {
     RRQ = 1,
