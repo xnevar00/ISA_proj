@@ -27,6 +27,7 @@
 #define MAXOPTIONNUMERALS 19
 #define MAXMESSAGESIZE 65507
 
+// opcodes of the packets
 enum Opcode {
     RRQ = 1,
     WRQ = 2,
@@ -44,15 +45,16 @@ enum StatusCode {
     PACKET_ERROR = -4,
 };
 
+// states for the finite state machine
 enum TransferState {
     WaitForTransfer,
     SendAck,
     ReceiveData,
     SendData,
     ReceiveAck,
-    SendError
 };
 
+//upload = client sends WRQ, download = client sends RRQ
 enum Direction {
     Upload,
     Download
