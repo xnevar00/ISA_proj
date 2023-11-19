@@ -30,6 +30,7 @@ public:
     std::string error_message;
     std::string options_string;
 
+    virtual ~TFTPPacket() {}
     virtual int parse(std::string receivedMessage) = 0;
     virtual int send(int udpSocket, sockaddr_in destination, std::vector<char> *last_data) const = 0;
     static std::pair<TFTPPacket *, int> parsePacket(std::string receivedMessage, std::string srcIP, int srcPort, int dstPort);
@@ -61,7 +62,6 @@ class ACKPacket : public TFTPPacket {
 public:
     ACKPacket() {};
     ACKPacket(unsigned short blknum);
-
     int parse(std::string receivedMessage) override;
     int send(int udpSocket, sockaddr_in destination, std::vector<char> *last_data) const override;
 };

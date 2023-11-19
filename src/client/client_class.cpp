@@ -33,8 +33,6 @@ Client *Client::getInstance()
     return client_;
 }
 
-
-//*****************ERRORS HANDLED********************/
 int Client::parse_arguments(int argc, char* argv[])
 {
     const struct option long_options[] = {
@@ -83,21 +81,19 @@ int Client::parse_arguments(int argc, char* argv[])
     if ((argc < 5) || (argc > 9) || (argc%2 != 1)) {
         return -1;
     }
-    OutputHandler::getInstance()->print_to_cout("Hostname" + hostname);
-    OutputHandler::getInstance()->print_to_cout("Port" + std::to_string(port));
-    OutputHandler::getInstance()->print_to_cout("Filepath" + filepath);
-    OutputHandler::getInstance()->print_to_cout("Dest Filepath" + destFilepath);
+    OutputHandler::getInstance()->print_to_cout("Hostname: " + hostname);
+    OutputHandler::getInstance()->print_to_cout("Port: " + std::to_string(port));
+    OutputHandler::getInstance()->print_to_cout("Filepath: " + filepath);
+    OutputHandler::getInstance()->print_to_cout("Dest Filepath: " + destFilepath);
 
     return 0;
 }
 
-
-//**************ERRORS HANDLED**********************/
 int Client::createUdpSocket() {
     udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
 
     if (udpSocket == -1) {
-        OutputHandler::getInstance()->print_to_cout("Chyba při vytváření socketu.");
+        OutputHandler::getInstance()->print_to_cout("Error creating socket.");
         return -1;
     }
     
@@ -108,7 +104,7 @@ int Client::createUdpSocket() {
     clientAddr.sin_port = htons(0);
     
     if (bind(udpSocket, (struct sockaddr*)&clientAddr, sizeof(clientAddr)) == -1) {
-        OutputHandler::getInstance()->print_to_cout("Chyba při bind.");
+        OutputHandler::getInstance()->print_to_cout("Error binding socket.");
         close(udpSocket);
         return -1;
     }
@@ -117,14 +113,14 @@ int Client::createUdpSocket() {
     socklen_t addressLength = sizeof(localAddress);
     getsockname(udpSocket, (struct sockaddr*)&localAddress, &addressLength);
 
-    //for stderr prints
+    //for stderr prints is needed to know client port
     clientPort = ntohs(localAddress.sin_port);
 
     return 0;
 }
 
 int Client::transferData() {
-    char buffer[65507]; // Buffer pro přijatou odpověď
+    char buffer[MAXMESSAGESIZE];
     struct sockaddr_in tmpServerAddr;
     socklen_t tmpServerAddrLen = sizeof(tmpServerAddr);
 
@@ -210,10 +206,6 @@ int Client::transferData() {
         case Opcode::WRQ:
             TFTPPacket::sendError(udpSocket, serverAddr, 4, "Illegal TFTP operation.");
             return -1;
-
-        case Opcode::ERROR:
-            return -1;
-            //handle error
         default:
             return -1;
             break;
@@ -229,10 +221,9 @@ int Client::transferData() {
     return 0;
 }
 
-//*******************ERRORS HANDLED**********************/
 int Client::handleSendingData()
 {
-    OutputHandler::getInstance()->print_to_cout("Getting data from stdin");
+    OutputHandler::getInstance()->print_to_cout("Getting data from stdin...");
     ssize_t bytesRead = 0;
     char c;
     std::vector<char> data;
@@ -305,7 +296,6 @@ int Client::handleSendingData()
     return 0;
 }
 
-//*****************ERRORS HANDLED**********************/
 int Client::transferFile()
 {
     int ok = 0;
@@ -396,11 +386,11 @@ int Client::transferFile()
                 setTimeout(&udpSocket, timeout);
                 current_state = TransferState::SendData;
                 break;
-            case TransferState::SendError:
-                //send error
+            default:
                 break;
         }
     }
+
     if (direction == Direction::Upload)
     {
         ok = -1;
@@ -437,7 +427,6 @@ int Client::transferFile()
     return 0;
 }
 
-//***********ERRORS HANDLED****************/
 void Client::updateAcceptedOptions(TFTPPacket *packet)
 {
     if (packet->blksize == -1 && block_size != 512)
@@ -455,8 +444,6 @@ void Client::updateAcceptedOptions(TFTPPacket *packet)
     return;
 }
 
-
-//*********ERRORS HANDLED*******************/
 int Client::setupFileForDownload()
 {
     OutputHandler::getInstance()->print_to_cout("Filepath: " + destFilepath);
@@ -471,16 +458,15 @@ int Client::setupFileForDownload()
     return 0;
 }
 
-//****************ERRORS HANDLED********************/
 int Client::sendBroadcastMessage() {
     struct sockaddr_in addr;
     std::memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(port); // Port 69 pro TFTP
+    addr.sin_port = htons(port); // Port 69 for TFTP
 
     serverAddr = addr;
 
-    // Převod hostname na IP adresu
+    // hostname to IP address
     struct addrinfo hints, *res;
     std::memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -493,8 +479,8 @@ int Client::sendBroadcastMessage() {
     struct sockaddr_in *addr_in = (struct sockaddr_in *)res->ai_addr;
     addr.sin_addr = addr_in->sin_addr;
 
-    freeaddrinfo(res); // Uvolnění struktury addrinfo
-    // konec prevodu hostname na IP adresu
+    freeaddrinfo(res);
+    // end of hostname to IP address
 
     int opcode;
     std::string filename;
@@ -516,7 +502,7 @@ int Client::sendBroadcastMessage() {
         }
     }
 
-    RRQWRQPacket packet(opcode, filename, mode, timeout, block_size, tsize); //-1 because of default blocksize
+    RRQWRQPacket packet(opcode, filename, mode, timeout, block_size, tsize);
     if(packet.send(udpSocket, addr, &last_data) == -1)
     {
         OutputHandler::getInstance()->print_to_cout("Error sending packet.");
@@ -526,7 +512,6 @@ int Client::sendBroadcastMessage() {
     return 0;
 }
 
-//***********ERRORS HANDLED*******************/
 int Client::communicate()
 {
     createUdpSocket();

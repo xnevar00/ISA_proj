@@ -1,3 +1,7 @@
+// File:    helper_functions.hpp
+// Author:  Veronika Nevarilova
+// Date:    11/2023
+
 #include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -20,6 +24,8 @@
 #define MAXTIMEOUTVALUE 255
 #define MAXRESENDATTEMPTS 4
 #define INITIALTIMEOUT 2
+#define MAXOPTIONNUMERALS 19
+#define MAXMESSAGESIZE 65507
 
 enum Opcode {
     RRQ = 1,
@@ -38,7 +44,7 @@ enum StatusCode {
     PACKET_ERROR = -4,
 };
 
-enum class TransferState {
+enum TransferState {
     WaitForTransfer,
     SendAck,
     ReceiveData,

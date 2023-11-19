@@ -5,8 +5,10 @@
 #include "../../include/helper_functions/helper_functions.hpp"
 
 bool str_is_digits_only(std::string str) {
-    for (char c : str) {
-        if (!std::isdigit(c)) {
+    for (char c : str) 
+    {
+        if (!std::isdigit(c)) 
+        {
             return false;
         }
     }
@@ -15,14 +17,17 @@ bool str_is_digits_only(std::string str) {
 
 std::string getArgument(int startIndex, std::string receivedMessage)
 {
-    if (startIndex >= (int)receivedMessage.length() || startIndex < 0) {
+    if (startIndex >= (int)receivedMessage.length() || startIndex < 0) 
+    {
         return "";
     }
     size_t nullByteIndex = receivedMessage.find('\0', startIndex);
-    if (nullByteIndex != std::string::npos) {
+    if (nullByteIndex != std::string::npos) 
+    {
         std::string result = receivedMessage.substr(startIndex, nullByteIndex - startIndex);
         return result;
-    } else {
+    } else 
+    {
         return "";
     }
 }
@@ -30,9 +35,11 @@ std::string getArgument(int startIndex, std::string receivedMessage)
 int getAnotherStartIndex(int startIndex, std::string receivedMessage)
 {
     size_t nullByteIndex = receivedMessage.find('\0', startIndex);
-    if (nullByteIndex != std::string::npos) {
+    if (nullByteIndex != std::string::npos) 
+    {
         return nullByteIndex + 1;
-    } else {
+    } else 
+    {
         return -1;
     }
 }
@@ -42,7 +49,7 @@ std::string getSingleArgument(int startIndex, std::string receivedMessage)
     std::string argument = getArgument(startIndex, receivedMessage);
     if (argument == "")
     {
-        OutputHandler::getInstance()->print_to_cout("CHYBA");
+        OutputHandler::getInstance()->print_to_cout("Error getting argument.");
         return "";
     }
     OutputHandler::getInstance()->print_to_cout("Argument: " + argument);
@@ -61,15 +68,15 @@ int setOption(int64_t *option, int *optionIndex, std::string receivedMessage, st
 {
     *optionIndex = getAnotherStartIndex(*optionIndex, receivedMessage);
     std::string option_str = getSingleArgument(*optionIndex, receivedMessage);
-    if (option_str == "" || !str_is_digits_only(option_str))
+    if (option_str == "" || !str_is_digits_only(option_str)) 
     {
         return -1;
-    } else
+    } else 
     {
-        if (option_str.length() > 19)
+        if (option_str.length() > MAXOPTIONNUMERALS)
         {
-            *option = MAXTSIZEVALUE + 1;
-        } else
+            *option = MAXTSIZEVALUE + 1; // set to invalid value
+        } else 
         {
             *option = std::stoll(option_str);
         }
@@ -78,43 +85,50 @@ int setOption(int64_t *option, int *optionIndex, std::string receivedMessage, st
     }
 }
 
-std::vector<char> intToBytes(unsigned short value) {
+std::vector<char> intToBytes(unsigned short value) 
+{
 
     std::vector<char> bytes(2);
-    bytes[0] = static_cast<char>((value >> 8) & 0xFF); // První byte (nejstarší bity)
-    bytes[1] = static_cast<char>(value & 0xFF);        // Druhý byte (mladší bity)
+    bytes[0] = static_cast<char>((value >> 8) & 0xFF); // first byte
+    bytes[1] = static_cast<char>(value & 0xFF);        // second byte
     return bytes;
 }
 
-std::string getIPAddress(const struct sockaddr_in& sockaddr) {
+std::string getIPAddress(const struct sockaddr_in& sockaddr) 
+{
     char ipBuffer[INET_ADDRSTRLEN];
 
-    // Using inet_ntop for IPv4
-    if (inet_ntop(AF_INET, &(sockaddr.sin_addr), ipBuffer, INET_ADDRSTRLEN) != nullptr) {
+    if (inet_ntop(AF_INET, &(sockaddr.sin_addr), ipBuffer, INET_ADDRSTRLEN) != nullptr) 
+    {
         return std::string(ipBuffer);
     } else {
         OutputHandler::getInstance()->print_to_cerr("Error converting IP address.");
-        return "";  // Return an empty string or handle the error accordingly
+        return "";
     }
 }
 
-void printAckInfo(std::string src_ip, int src_port, int block_id) {
+void printAckInfo(std::string src_ip, int src_port, int block_id) 
+{
     OutputHandler::getInstance()->print_to_cerr("ACK " + src_ip + ":" + std::to_string(src_port) + " " + std::to_string(block_id));
 }
 
-void printDataInfo(std::string src_ip, int src_port, int dst_port, int block_id) {
+void printDataInfo(std::string src_ip, int src_port, int dst_port, int block_id) 
+{
     OutputHandler::getInstance()->print_to_cerr("DATA " + src_ip + ":" + std::to_string(src_port) + ":" + std::to_string(dst_port) + " " + std::to_string(block_id));
 }
 
-void printErrorInfo(std::string src_ip, int src_port, int dst_port, unsigned short error_code, std::string error_msg) {
+void printErrorInfo(std::string src_ip, int src_port, int dst_port, unsigned short error_code, std::string error_msg) 
+{
     OutputHandler::getInstance()->print_to_cerr("ERROR " + src_ip + ":" + std::to_string(src_port) + ":" + std::to_string(dst_port) + " " + std::to_string(error_code) + " \"" + error_msg  + "\"");
 }
 
-void printOackInfo(std::string src_ip, int src_port, std::string options) {
+void printOackInfo(std::string src_ip, int src_port, std::string options) 
+{
     OutputHandler::getInstance()->print_to_cerr("OACK " + src_ip + ":" + std::to_string(src_port) + " " + options);
 }
 
-void printRrqWrqInfo(int opcode, std::string src_ip, int src_port, std::string filepath, std::string mode, std::string options) {
+void printRrqWrqInfo(int opcode, std::string src_ip, int src_port, std::string filepath, std::string mode, std::string options) 
+{
     std::string output_opcode = "";
     if (opcode == Opcode::WRQ)
     {
@@ -129,7 +143,8 @@ void printRrqWrqInfo(int opcode, std::string src_ip, int src_port, std::string f
     OutputHandler::getInstance()->print_to_cerr(output_opcode + src_ip + ":" + std::to_string(src_port) + " \"" + filepath + "\" " + mode + options);
 }
 
-int getLocalPort(int udpSocket) {
+int getLocalPort(int udpSocket) 
+{
     struct sockaddr_in localAddress;
     socklen_t addressLength = sizeof(localAddress);
     getsockname(udpSocket, (struct sockaddr*)&localAddress, &addressLength);
@@ -155,7 +170,6 @@ int resendData(int udp_socket, sockaddr_in destination, std::vector<char> data)
         OutputHandler::getInstance()->print_to_cerr("Error while resending the message:" + std::to_string(errno));
         return -1;
     }
-
     return 0;
 }
 
@@ -198,8 +212,8 @@ int isEnoughSpace(std::string root_dirpath, int64_t tsize)
     uint64_t available = stat.f_bsize * stat.f_bavail;
 
     if (available >= static_cast<uint64_t>(tsize)) {
-        return 1;  // Enough space
+        return 1;  // enough space
     } else {
-        return 0;  // Not enough space
+        return 0;  // not enough space
     }
 }

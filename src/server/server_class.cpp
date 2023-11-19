@@ -19,7 +19,6 @@ void setupSignalHandler() {
     std::signal(SIGINT, signalHandler);
 }
 
-
 Server* Server::server_ = nullptr;;
 
 Server *Server::getInstance()
@@ -49,29 +48,29 @@ int Server::parse_arguments(int argc, char* argv[], Server *server)
             case 'p':
                 if (str_is_digits_only(optarg) == false) 
                 {
-                    return StatusCode::INVALID_ARGUMENTS;
+                    return -1;
                 } else 
                 {
                     server->port = std::atoi(optarg);
                     if (server->port <= 0 || server->port > 65535) 
                     {
-                        return StatusCode::INVALID_ARGUMENTS;
+                        return -1;
                     }
                     port_set = true;
                 }
                 break;
             case '?':
-                return StatusCode::INVALID_ARGUMENTS;
+                return -1;
             default:
                 break;
         }
     }
 
     if (optind >= argc) {
-        return StatusCode::INVALID_ARGUMENTS;
+        return -1;
     }
     if ((argc > 2 && port_set == false) || argc > 4) {
-        return StatusCode::INVALID_ARGUMENTS;
+        return -1;
     }
 
     server->root_dirpath = argv[optind];
@@ -79,14 +78,14 @@ int Server::parse_arguments(int argc, char* argv[], Server *server)
     OutputHandler::getInstance()->print_to_cout("Port:" + std::to_string(server->port));
     OutputHandler::getInstance()->print_to_cout("Directory:" + server->root_dirpath);
 
-    return StatusCode::SUCCESS;
+    return 0;
 }
 
 int Server::listen(Server *server)
 {
     int udpSocket = initialize_connection(server);
-    if (udpSocket == StatusCode::CONNECTION_ERROR || udpSocket == StatusCode::SOCKET_ERROR) {
-        return udpSocket;
+    if (udpSocket == -1) {
+        return -1;
     }
 
     OutputHandler::getInstance()->print_to_cout("Listening...");
@@ -94,7 +93,7 @@ int Server::listen(Server *server)
 
     close(udpSocket);
 
-    return StatusCode::SUCCESS;
+    return 0;
 }
 
 int Server::create_udp_socket() {
@@ -102,7 +101,7 @@ int Server::create_udp_socket() {
 
     if (udpSocket == -1) {
         OutputHandler::getInstance()->print_to_cout("Error creating UDP socket.");
-        return StatusCode::SOCKET_ERROR;
+        return -1;
     }
     return udpSocket;
 }
@@ -117,7 +116,7 @@ int Server::setup_udp_socket(int udpSocket, Server *server){
     if (bind(udpSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
         OutputHandler::getInstance()->print_to_cout("Error establishing connection.");
         close(udpSocket);
-        return StatusCode::CONNECTION_ERROR;
+        return -1;
     }
     return udpSocket;
 }
@@ -125,27 +124,19 @@ int Server::setup_udp_socket(int udpSocket, Server *server){
 int Server::initialize_connection(Server *server)
 {
     int udpSocket = create_udp_socket();
-    if (udpSocket == StatusCode::SOCKET_ERROR) {
-        return StatusCode::SOCKET_ERROR;
+    if (udpSocket == -1) {
+        return -1;
     }
     udpSocket = setup_udp_socket(udpSocket, server);
-    if(udpSocket == StatusCode::CONNECTION_ERROR){
-        return StatusCode::CONNECTION_ERROR;
+    if(udpSocket == -1){
+        return -1;
     }
     return udpSocket;
 
 }
 
-int Server::respond_to_client(int udpSocket, const char* message, size_t messageLength, struct sockaddr_in* clientAddr, socklen_t clientAddrLen) {
-    if (sendto(udpSocket, message, messageLength, 0, (struct sockaddr*)clientAddr, clientAddrLen) == -1) {
-        OutputHandler::getInstance()->print_to_cout("Error sending response: " + std::string(strerror(errno)));
-        return StatusCode::CONNECTION_ERROR;
-    }
-    return StatusCode::SUCCESS;
-}
-
 void Server::server_loop(int udpSocket) {
-    char buffer[65507]; // Buffer pro přijatou zprávu, max velikost UDP packetu
+    char buffer[MAXMESSAGESIZE];
 
     //SIGINT handling
     setupSignalHandler();
@@ -157,15 +148,17 @@ void Server::server_loop(int udpSocket) {
     struct timeval tv;
     tv.tv_sec = 0;
     tv.tv_usec = 100000;
-    if (setsockopt(udpSocket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+    if (setsockopt(udpSocket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) 
+    {
         OutputHandler::getInstance()->print_to_cout("Error setting socket options: " + std::string(strerror(errno)));
     }
 
     while (true && !terminateThreads) {
         int bytesRead = recvfrom(udpSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
         if (bytesRead == -1) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-                // Timeout, check if we should terminate
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) 
+            {
+                // timeout, check if we should terminate
                 if (terminateThreads) {
                     OutputHandler::getInstance()->print_to_cout("Terminating the server.");
                     for (auto& future : futures_vector) {
@@ -205,7 +198,6 @@ void Server::server_loop(int udpSocket) {
 
 
 
-//*********************ERRORS HANDLED*****************/
 void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, sockaddr_in set_clientAddr, std::string set_root_dirpath){
     clientAddr = set_clientAddr;
     root_dirpath = set_root_dirpath;
@@ -216,7 +208,7 @@ void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, soc
         return;
     }
 
-    if(bytesRead >= 2)
+    if(bytesRead >= 2) // checking that at least opcode is there, other checks are in parsePacket
     {
         auto [packet, ok] = TFTPPacket::parsePacket(receivedMessage, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(udpSocket));
         if (ok == -1)
@@ -252,7 +244,6 @@ void ClientHandler::handleClient(std::string receivedMessage, int bytesRead, soc
     return;
 }
 
-//*********************ERRORS HANDLED*****************/
 void ClientHandler::handlePacket(TFTPPacket *packet)
 {
     if(packet->blksize != -1)   //if not set in rrq/wrq, remain default (512)
@@ -371,7 +362,6 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
     }
 }
 
-//**************ERRORS HANDLED*****************/
 int ClientHandler::createUdpSocket()
 {
     udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
@@ -441,30 +431,19 @@ int ClientHandler::receiveData()
 
     std::string received_message(received_data, bytesRead);
     OutputHandler::getInstance()->print_to_cout("Received message:" + received_message);
-    if (bytesRead < 4)
+    if (bytesRead < 4) // minimum size of DATA packet is 4
     {
         TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
         return -1;
     }
 
     auto [packet, ok] = TFTPPacket::parsePacket(received_message, getIPAddress(clientAddr), ntohs(clientAddr.sin_port), getLocalPort(udpSocket));
-    if (ok != 0)
+    if ((ok != 0) || (packet->opcode != Opcode::DATA) || (packet->blknum != block_number))
     {
         TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
         return -1;
     }
 
-    if (packet->opcode != Opcode::DATA)
-    {
-        TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
-        return -1;
-    }
-    if (packet->blknum != block_number)
-    {
-        
-        TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
-        return -1;
-    }
     if (writeData(packet->data) == -1)
     {
         //error already handled
@@ -626,6 +605,7 @@ int ClientHandler::transferFile()
                     current_state = TransferState::ReceiveData;
                 }
                 break;
+
             case TransferState::SendAck:
                 ok = TFTPPacket::sendAck(block_number, udpSocket, clientAddr, &last_data);
                 if (ok == -1)
@@ -636,8 +616,8 @@ int ClientHandler::transferFile()
                 block_number++;
                 current_state = TransferState::ReceiveData;
                 break;
+
             case TransferState::ReceiveData:
-                //receive data
                 ok = TFTPPacket::receiveData(udpSocket, block_number, block_size, &(file), &(last_packet), clientPort, &r_flag, mode);
                 if (ok == -1)
                 {
@@ -667,8 +647,8 @@ int ClientHandler::transferFile()
                 setTimeout(&udpSocket, timeout);
                 current_state = TransferState::SendAck;
                 break;
+
             case TransferState::SendData:
-                //send data
                 ok = handleSendingData();
                 if (ok == -1)
                 {
@@ -677,8 +657,8 @@ int ClientHandler::transferFile()
                 }
                 current_state = TransferState::ReceiveAck;
                 break;
+
             case TransferState::ReceiveAck:
-                //receive ack
                 ok = TFTPPacket::receiveAck(udpSocket, block_number, clientPort);
                 if (ok == -1)
                 {
@@ -711,6 +691,7 @@ int ClientHandler::transferFile()
                     current_state = TransferState::SendData;
                 }
                 break;
+                
             default:
                 OutputHandler::getInstance()->print_to_cout("Illegal TFTP operation");
                 TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
