@@ -8,16 +8,16 @@
 
 namespace fs = std::filesystem;
 
-std::atomic<bool> terminateThreads(false);
+std::atomic<bool> terminateThreadsServer(false);
 
-void signalHandler(int signal) {
+void signalHandlerServer(int signal) {
     // setting reaction to SIGINT
     OutputHandler::getInstance()->print_to_cout("Signal " + std::to_string(signal) + " received.");
-    terminateThreads = true;
+    terminateThreadsServer = true;
 }
 
-void setupSignalHandler() {
-    std::signal(SIGINT, signalHandler);
+void setupSignalHandlerServer() {
+    std::signal(SIGINT, signalHandlerServer);
 }
 
 Server* Server::server_ = nullptr;;
@@ -142,7 +142,7 @@ void Server::server_loop(int udpSocket) {
     char buffer[MAXMESSAGESIZE];
 
     //SIGINT handling
-    setupSignalHandler();
+    setupSignalHandlerServer();
 
     std::vector<std::future<void>> futures_vector;
 
@@ -156,14 +156,14 @@ void Server::server_loop(int udpSocket) {
         OutputHandler::getInstance()->print_to_cout("Error setting socket options: " + std::string(strerror(errno)));
     }
 
-    while (true && !terminateThreads) {
+    while (true && !terminateThreadsServer) {
         // getting the clients but periodically checking whether there is SIGINT signal to terminate
         int bytesRead = recvfrom(udpSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
         if (bytesRead == -1) {
             if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) 
             {
                 // timeout, check if we should terminate
-                if (terminateThreads) {
+                if (terminateThreadsServer) {
                     OutputHandler::getInstance()->print_to_cout("Terminating the server.");
                     for (auto& future : futures_vector) {
                         future.get();
@@ -274,10 +274,14 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
         timeout = INITIALTIMEOUT;
         packet->timeout = -1;
     }
-    if ((packet->blksize < 8 && block_size_set == true) || (packet->blksize > MAXBLKSIZEVALUE))
+    if (packet->blksize < 8 && block_size_set == true)
     {
         block_size = 512;
         block_size_set = false;
+    } else if ((packet->blksize > MAXBLKSIZEVALUE))
+    {
+        block_size = MAXBLKSIZEVALUE;
+        block_size_set = true;
     }
     if ((packet->tsize > MAXTSIZEVALUE && direction == Direction::Upload) || (packet->tsize != 0 && direction == Direction::Download))
     {
@@ -346,7 +350,15 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
     // if any option was requested, respond with OACK packet
     if (block_size_set == true || packet->timeout != -1 || packet->tsize != -1)
     {
-        OACKPacket OACK_response_packet(block_number, block_size_set, block_size, timeout, tsize);
+        int timeout_to_send;
+        if (packet->timeout == -1)
+        {
+            timeout_to_send = -1;
+        } else
+        {
+            timeout_to_send = timeout;
+        }
+        OACKPacket OACK_response_packet(block_number, block_size_set, block_size, timeout_to_send, tsize);
         if (OACK_response_packet.send(udpSocket, clientAddr, &last_data) == -1)
         {
             OutputHandler::getInstance()->print_to_cout("Error sending OACK packet.");
@@ -559,7 +571,7 @@ int ClientHandler::transferFile()
 {
     // finite state machine used for transfer of the data
     int ok;
-    while(last_packet == false && !terminateThreads && attempts_to_resend <= MAXRESENDATTEMPTS)
+    while(last_packet == false && !terminateThreadsServer && attempts_to_resend <= MAXRESENDATTEMPTS)
     {
         switch(current_state){
             case TransferState::WaitForTransfer:
@@ -610,6 +622,14 @@ int ClientHandler::transferFile()
                     timeout *= 2;
                     setTimeout(&udpSocket, timeout);
                     break;
+                } else if (ok == -4)
+                {
+                    OutputHandler::getInstance()->print_to_cout("Received ERROR from client, aborting.");
+                    return -1;
+                } else if (ok == -5)
+                {
+                    OutputHandler::getInstance()->print_to_cout("An errror occured, aborting.");
+                    return -1;
                 }
                 // received data, set everything to default
                 attempts_to_resend = 0;
@@ -636,6 +656,12 @@ int ClientHandler::transferFile()
                     OutputHandler::getInstance()->print_to_cout("Illegal TFTP operation.");
                     TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
                     return -1;
+                }  else if (ok == -2)
+                {
+                    // received data from someone else, wait for data from out client
+                    OutputHandler::getInstance()->print_to_cout("Unknown transfer ID.");
+                    current_state = TransferState::ReceiveAck;
+                    break;
                 } else if (ok == -3)
                 {
                     attempts_to_resend++;
@@ -650,6 +676,14 @@ int ClientHandler::transferFile()
                     OutputHandler::getInstance()->print_to_cout("Setting timeout to: " + std::to_string(timeout));
                     setTimeout(&udpSocket, timeout);
                     break;
+                } else if (ok == -4)
+                {
+                    OutputHandler::getInstance()->print_to_cout("Received ERROR from client, aborting.");
+                    return -1;
+                } else if (ok == -5)
+                {
+                    OutputHandler::getInstance()->print_to_cout("An errror occured, aborting.");
+                    return -1;
                 }
                 // received ack, set everything to default
                 attempts_to_resend = 0;
@@ -672,9 +706,10 @@ int ClientHandler::transferFile()
         }
     }
     // SIGINT was received
-    if (terminateThreads)
+    if (terminateThreadsServer)
     {   
         OutputHandler::getInstance()->print_to_cout("Ending thread because of SIGINT.");
+        TFTPPacket::sendError(udpSocket, clientAddr, 0, "Server terminated.");
         return -1;
     }
     // timed out
@@ -695,7 +730,7 @@ int ClientHandler::transferFile()
     } else 
     {        
         ok = -1;
-        while(ok != 0 && attempts_to_resend < MAXRESENDATTEMPTS && !terminateThreads)
+        while(ok != 0 && attempts_to_resend < MAXRESENDATTEMPTS && !terminateThreadsServer)
         {   
             ok = TFTPPacket::receiveAck(udpSocket, block_number, clientPort);
             if (ok == -1)
@@ -713,9 +748,10 @@ int ClientHandler::transferFile()
                 setTimeout(&udpSocket, timeout);
             }
         }
-        if (terminateThreads)
+        if (terminateThreadsServer)
         {   
             OutputHandler::getInstance()->print_to_cout("Ending thread because of SIGINT.");
+            TFTPPacket::sendError(udpSocket, clientAddr, 0, "Server terminated.");
             return -1;
         }
     }

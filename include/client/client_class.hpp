@@ -15,7 +15,23 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <vector>
+#include <signal.h>
+#include <csignal>
+#include <atomic>
 #include "../../include/packet/tftp-packet-class.hpp"
+
+/**
+ * @brief Function used to handle the SIGINT signal.
+ * @param signal received signal.
+ */
+void signalHandlerClient(int signal);
+
+
+/**
+ * @brief Sets up the signal handler for SIGINT.
+ */
+void setupSignalHandlerClient();
+
 
 /**
  * @class Client

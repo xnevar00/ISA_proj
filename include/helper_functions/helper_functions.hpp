@@ -62,6 +62,7 @@ enum Direction {
     Download
 }; 
 
+
 /**
  * @brief Checks if a string contains only digits.
  *

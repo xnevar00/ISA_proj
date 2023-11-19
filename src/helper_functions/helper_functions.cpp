@@ -4,6 +4,7 @@
 
 #include "../../include/helper_functions/helper_functions.hpp"
 
+
 bool str_is_digits_only(std::string str) {
     for (char c : str) 
     {
@@ -36,7 +37,7 @@ std::string getArgument(int startIndex, std::string receivedMessage)
 int getAnotherStartIndex(int startIndex, std::string receivedMessage)
 {
     size_t nullByteIndex = receivedMessage.find('\0', startIndex);
-    if (nullByteIndex != std::string::npos) 
+    if (nullByteIndex != std::string::npos && nullByteIndex + 1 < receivedMessage.length()) 
     {
         //start index if always after zero byte
         return nullByteIndex + 1;

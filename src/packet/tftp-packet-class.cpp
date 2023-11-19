@@ -92,7 +92,7 @@ int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number, int clie
             return -3;
         } else {
             OutputHandler::getInstance()->print_to_cout("Error in recvfrom: " + std::string(strerror(errno)));
-            close(udp_socket);
+            return -1;
         }
     }
 
@@ -110,7 +110,18 @@ int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number, int clie
     }
 
     auto [packet, ok] = TFTPPacket::parsePacket(received_message, getIPAddress(addr), ntohs(addr.sin_port), getLocalPort(udp_socket));
-    if ((packet->opcode != Opcode::ACK) || (ok == -1) || (packet->blknum != block_number))
+    if (packet->opcode != Opcode::ACK)
+    {
+        if (packet->opcode == Opcode::ERROR)
+        {
+            return -5;
+        } else 
+        {
+            TFTPPacket::sendError(udp_socket, addr, 4, "Illegal TFTP operation.");
+            return -2;
+        }
+    }
+    if ((ok == -1) || (packet->blknum != block_number))
     {
         return -1;
     }
@@ -132,7 +143,7 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
             return -3;
         } else {
             OutputHandler::getInstance()->print_to_cout("Error in recvfrom: " + std::string(strerror(errno)));
-            close(udp_socket);
+            return -1;
         }
     }
     if (getPort(tmpClientAddr) != client_port)
@@ -149,10 +160,16 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
     }
 
     auto [packet, ok] = TFTPPacket::parsePacket(received_message, getIPAddress(tmpClientAddr), ntohs(tmpClientAddr.sin_port), getLocalPort(udp_socket));
-    if (packet->opcode == Opcode::ERROR)
+    if (packet->opcode != Opcode::DATA)
     {
-        //just return, no need to respond
-        return -1;
+        if (packet->opcode == Opcode::ERROR)
+        {
+            return -5;
+        } else 
+        {
+            TFTPPacket::sendError(udp_socket, tmpClientAddr, 4, "Illegal TFTP operation.");
+            return -2;
+        }
     }
     if (ok != 0 || (packet->opcode != Opcode::DATA && packet->opcode != Opcode::ERROR) || (packet->data.size() > (long unsigned)block_size))
     {
@@ -356,9 +373,15 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
                 return -2;
             }
         } else {
-            //skipping unknown option
+            //skipping unknown option           55----1 => 551
             optionIndex = getAnotherStartIndex(optionIndex, receivedMessage);
+            std::cout << "Option: "  << optionIndex << std::endl;
             if (optionIndex == -1)
+            {
+                OutputHandler::getInstance()->print_to_cout("Error parsing RRQ/WRQ packet. (11)");
+                return -2;
+            }
+            if (getSingleArgument(optionIndex, receivedMessage) == "")
             {
                 OutputHandler::getInstance()->print_to_cout("Error parsing RRQ/WRQ packet. (11)");
                 return -2;
@@ -619,6 +642,7 @@ int ERRORPacket::parse(std::string receivedMessage){
     {
         return -1;
     }
+    opcode = Opcode::ERROR;
     std::string error_code_str = receivedMessage.substr(2, 2);
     this->error_code = (static_cast<unsigned char>(error_code_str[0]) << 8) | static_cast<unsigned char>(error_code_str[1]); 
     this->error_message = receivedMessage.substr(4);

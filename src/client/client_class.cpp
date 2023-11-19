@@ -9,6 +9,18 @@
 
 namespace fs = std::filesystem;
 
+std::atomic<bool> terminateClient(false);
+
+void signalHandlerClient(int signal) {
+    // setting reaction to SIGINT
+    OutputHandler::getInstance()->print_to_cout("Signal " + std::to_string(signal) + " received.");
+    terminateClient = true;
+}
+
+void setupSignalHandlerClient() {
+    std::signal(SIGINT, signalHandlerClient);
+}
+
 Client* Client::client_ = nullptr;;
 
 Client *Client::getInstance()
@@ -122,6 +134,8 @@ int Client::createUdpSocket() {
 }
 
 int Client::transferData() {
+    setupSignalHandlerClient();
+
     char buffer[MAXMESSAGESIZE];
     struct sockaddr_in tmpServerAddr;
     socklen_t tmpServerAddrLen = sizeof(tmpServerAddr);
@@ -131,7 +145,7 @@ int Client::transferData() {
     int bytesRead = -1;
     attempts_to_resend = 0;
     // try to receive data from server but if it fails, try to resend request
-    while((attempts_to_resend <= MAXRESENDATTEMPTS) && (bytesRead == -1))
+    while((attempts_to_resend <= MAXRESENDATTEMPTS) && (bytesRead == -1) && !terminateClient)
     {
         bytesRead = recvfrom(udpSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&tmpServerAddr, &tmpServerAddrLen);
         if (bytesRead == -1) {
@@ -147,10 +161,15 @@ int Client::transferData() {
                     setTimeout(&udpSocket, timeout);
                 }
             } else {
-                OutputHandler::getInstance()->print_to_cout("Error in recvfrom: " + std::string(strerror(errno)));
+                OutputHandler::getInstance()->print_to_cout("Aborting. " + std::string(strerror(errno)));
                 return -1;
             }
         }
+    }
+    if (terminateClient)
+    {
+        OutputHandler::getInstance()->print_to_cout("Terminating client.");
+        return -1;
     }
     if (bytesRead == -1 && attempts_to_resend >= MAXRESENDATTEMPTS)
     {
@@ -238,8 +257,13 @@ int Client::transferData() {
 
     if (transferFile() == -1)
     {
-        //error handled in transferFile
-        clean(&file, destFilepath);
+       if (direction == Direction::Download)
+        {
+            clean(&file, filepath);
+        } else if (file.is_open())
+        {
+            file.close();
+        }
         return -1;
     }
 
@@ -328,7 +352,7 @@ int Client::transferFile()
     // finite state machine used for transfer of the data
     int ok = 0;
     // the transfer will end due to timeout or receiving the last packet of the transfered file
-    while(last_packet == false && attempts_to_resend < MAXRESENDATTEMPTS)
+    while(last_packet == false && attempts_to_resend < MAXRESENDATTEMPTS && !terminateClient)
     {
         switch(current_state){
             case TransferState::WaitForTransfer:
@@ -375,6 +399,10 @@ int Client::transferFile()
                     timeout *= 2;
                     setTimeout(&udpSocket, timeout);
                     break;
+                } else if (ok == -4)
+                {
+                    OutputHandler::getInstance()->print_to_cout("Received ERROR from server. Aborting.");
+                    return -1;
                 }
                 // received data, setting the timeout back to initial value
                 attempts_to_resend = 0;
@@ -417,6 +445,10 @@ int Client::transferFile()
                     timeout *= 2;
                     setTimeout(&udpSocket, timeout);
                     break;
+                } else if (ok == -4)
+                {
+                    OutputHandler::getInstance()->print_to_cout("Received ERROR from server. Aborting.");
+                    return -1;
                 }
                 // set the timeout to initial value
                 attempts_to_resend = 0;
@@ -427,6 +459,11 @@ int Client::transferFile()
             default:
                 break;
         }
+    }
+    if (terminateClient)
+    {
+        TFTPPacket::sendError(udpSocket, serverAddr, 0, "Terminating client.");
+        return -1;
     }
     // it the transfer ended due to timeout, aborting
     if (attempts_to_resend >= MAXRESENDATTEMPTS)
@@ -440,7 +477,7 @@ int Client::transferFile()
     {
         ok = -1;
         // until received ACK or tried to resend the packet maximum of times, wait for the ACK
-        while(ok != 0 && attempts_to_resend <= MAXRESENDATTEMPTS)
+        while(ok != 0 && attempts_to_resend <= MAXRESENDATTEMPTS && !terminateClient)
         {
             ok = TFTPPacket::receiveAck(udpSocket, block_number, serverPort);
             if (ok == -1)
@@ -457,7 +494,17 @@ int Client::transferFile()
                 timeout *= 2;
                 OutputHandler::getInstance()->print_to_cout("Setting timeout to: " + std::to_string(timeout));
                 setTimeout(&udpSocket, timeout);
+            } else if (ok == -4)
+            {
+                OutputHandler::getInstance()->print_to_cout("Received ERROR from server. Aborting.");
+                return -1;
+            
             }
+        }
+        if (terminateClient)
+        {
+            TFTPPacket::sendError(udpSocket, serverAddr, 0, "Terminating client.");
+            return -1;
         }
         if (attempts_to_resend >= MAXRESENDATTEMPTS && ok != 0)
         {

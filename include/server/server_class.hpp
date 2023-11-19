@@ -16,9 +16,9 @@
 #include <thread>
 #include <string>
 #include <atomic>
+#include <future>
 #include <signal.h>
 #include <csignal>
-#include <future>
 #include <algorithm>
 #include "../../include/packet/tftp-packet-class.hpp"
 
@@ -26,14 +26,13 @@
  * @brief Function used to handle the SIGINT signal.
  * @param signal received signal.
  */
-void signalHandler(int signal);
+void signalHandlerServer(int signal);
 
 
 /**
  * @brief Sets up the signal handler for SIGINT.
  */
-void setupSignalHandler();
-
+void setupSignalHandlerServer();
 
 /**
  * @class Server
