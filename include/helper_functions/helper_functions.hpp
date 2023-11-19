@@ -1,6 +1,8 @@
-// File:    helper_functions.hpp
-// Author:  Veronika Nevarilova
-// Date:    11/2023
+/**
+ * @file helper_functions.hpp
+ * @author Veronika Nevarilova
+ * @date 11/2023
+ */
 
 #include <iostream>
 #include <sys/socket.h>
