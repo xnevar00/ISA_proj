@@ -256,19 +256,33 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
         block_size = packet->blksize;
         block_size_set = true;
     }
+
     filename = packet->filename;
-    if (packet->timeout != -1)  //uf not set in rrq/wrq, remain default (5)
+
+    if (packet->timeout != -1)  //if not set in rrq/wrq, remain default (5)
     {
         timeout = packet->timeout;
         set_timeout_by_client = packet->timeout;
     }
-    tsize = packet->tsize;
 
+    tsize = packet->tsize;
     mode = packet->mode;
-    if ((packet->timeout > MAXTIMEOUTVALUE) || (packet->blksize < 8 && block_size_set == true) || (packet->blksize > MAXBLKSIZEVALUE) || (packet->tsize > MAXTSIZEVALUE) || (packet->tsize < -1))
+
+    // if client sent illegal options, the server will not give them to the oack packet and will use default values
+    if (packet->timeout > MAXTIMEOUTVALUE)
     {
-        TFTPPacket::sendError(udpSocket, clientAddr, 8, "Illegal options.");
-        return;
+        timeout = INITIALTIMEOUT;
+        packet->timeout = -1;
+    }
+    if ((packet->blksize < 8 && block_size_set == true) || (packet->blksize > MAXBLKSIZEVALUE))
+    {
+        block_size = 512;
+        block_size_set = false;
+    }
+    if ((packet->tsize > MAXTSIZEVALUE && direction == Direction::Upload) || (packet->tsize != 0 && direction == Direction::Download))
+    {
+        tsize = -1;
+        packet->tsize = -1;
     }
 
     // if tsize was requested/sent byt the client

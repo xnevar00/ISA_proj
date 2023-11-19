@@ -22,7 +22,7 @@ Client *Client::getInstance()
         client_->udpSocket = -1;
         client_->last_packet = false;
         client_->block_number = 0;
-        client_->block_size = 1021;
+        client_->block_size = 512;
         client_->timeout = 2;
         client_->tsize = 0;
         client_->current_state = TransferState::WaitForTransfer;
@@ -181,17 +181,23 @@ int Client::transferData() {
 
     switch(packet->opcode){
         case Opcode::ACK:
-            if (direction != Direction::Upload)
+            if (direction == Direction::Download)
             {
                 OutputHandler::getInstance()->print_to_cout("Received ACK packet when expecting DATA or OACK packet.");
                 TFTPPacket::sendError(udpSocket, serverAddr, 4, "Illegal TFTP operation.");
                 return -1;
+            } else if (direction == Direction::Upload)
+            {
+                block_size = 512;
+                timeout = INITIALTIMEOUT;
+                tsize = -1;
             }
+
             OutputHandler::getInstance()->print_to_cout("Received ACK packet.");
             break;
 
         case Opcode::OACK:
-            if (block_size == 513 && timeout == -1 && tsize == -1) //no options sent to server but server responded with OACK packet
+            if (block_size == 512 && timeout == -1 && tsize == -1) //no options sent to server but server responded with OACK packet
             {
                 OutputHandler::getInstance()->print_to_cout("Received OACK packet when expecting DATA or ACK packet.");
                 TFTPPacket::sendError(udpSocket, serverAddr, 4, "Illegal TFTP operation.");
@@ -208,6 +214,11 @@ int Client::transferData() {
                 OutputHandler::getInstance()->print_to_cout("Received DATA packet when expecting ACK or OACK packet.");
                 TFTPPacket::sendError(udpSocket, serverAddr, 4, "Illegal TFTP operation.");
                 return -1;
+            } else if (block_size != 512 && timeout != -1 && tsize != -1)
+            {
+                block_size = 512;
+                timeout = INITIALTIMEOUT;
+                tsize = -1;
             }
             block_number++;
             file.write(packet->data.data(), packet->data.size());
@@ -475,6 +486,9 @@ void Client::updateAcceptedOptions(TFTPPacket *packet)
     if (packet->blksize == -1 && block_size != 512)
     {
         block_size = 512;
+    } else if (packet->blksize != -1)
+    {
+        block_size = packet->blksize;
     }
     if (packet->timeout == -1 && timeout != -1)
     {
@@ -545,7 +559,7 @@ int Client::sendBroadcastMessage() {
         }
     }
 
-    RRQWRQPacket packet(opcode, filename, mode, timeout, block_size, tsize);
+    RRQWRQPacket packet(opcode, filename, mode, -1, -1, -1);
     if(packet.send(udpSocket, addr, &last_data) == -1)
     {
         OutputHandler::getInstance()->print_to_cout("Error sending packet.");

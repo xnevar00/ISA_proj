@@ -110,7 +110,7 @@ int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number, int clie
     }
 
     auto [packet, ok] = TFTPPacket::parsePacket(received_message, getIPAddress(addr), ntohs(addr.sin_port), getLocalPort(udp_socket));
-    if ((packet->opcode != Opcode::ACK) || (ok != -1) || (packet->blknum != block_number))
+    if ((packet->opcode != Opcode::ACK) || (ok == -1) || (packet->blknum != block_number))
     {
         return -1;
     }
@@ -259,7 +259,14 @@ RRQWRQPacket::RRQWRQPacket(int opcode, std::string filename, std::string mode, i
     this->filename = filename;
     this->mode = mode;
     this->timeout = timeout;
-    this->blksize = blksize;
+    // if default, dont send as option
+    if (blksize == 512)
+    {
+        this->blksize = -1;
+    } else
+    {
+        this->blksize = blksize;
+    }
     this->tsize = tsize;
 }
 
