@@ -1,15 +1,10 @@
-// File:    tftp-client.cpp
-// Author:  Veronika Nevarilova
-// Date:    11/2023
+/**
+ * @file tftp-client.cpp
+ * @author Veronika Nevarilova (xnevar00)
+ * @date 11/2023
+ */
 
-#include <iostream>
-#include <cstdlib>
-#include <cstring>
-#include <ctype.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <unistd.h>
+
 #include "../../include/client/client_class.hpp"
 
 int main(int argc, char* argv[]) {

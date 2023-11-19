@@ -1,6 +1,6 @@
 /**
  * @file server_class.hpp
- * @author Veronika Nevarilova
+ * @author Veronika Nevarilova (xnevar00)
  * @date 11/2023
  */
 
@@ -20,7 +20,7 @@
 #include <signal.h>
 #include <csignal>
 #include <algorithm>
-#include "../../include/packet/tftp-packet-class.hpp"
+#include "../../include/packet/tftp_packet_class.hpp"
 
 /**
  * @brief Function used to handle the SIGINT signal.

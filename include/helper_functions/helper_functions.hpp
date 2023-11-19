@@ -1,6 +1,6 @@
 /**
  * @file helper_functions.hpp
- * @author Veronika Nevarilova
+ * @author Veronika Nevarilova (xnevar00)
  * @date 11/2023
  */
 

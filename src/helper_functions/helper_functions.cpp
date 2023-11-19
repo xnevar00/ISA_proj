@@ -1,6 +1,9 @@
-// File:    helper_functions.cpp
-// Author:  Veronika Nevarilova
-// Date:    11/2023
+/**
+ * @file helper_functions.cpp
+ * @author Veronika Nevarilova (xnevar00)
+ * @date 11/2023
+ */
+
 
 #include "../../include/helper_functions/helper_functions.hpp"
 

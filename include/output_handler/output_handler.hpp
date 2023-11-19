@@ -1,11 +1,12 @@
 /**
  * @file output_handler.hpp
- * @author Veronika Nevarilova
+ * @author Veronika Nevarilova (xnevar00)
  * @date 11/2023
  */
 
 #include <string>
 #include <mutex>
+#include <iostream>
 
 /**
  * @class OutputHandler

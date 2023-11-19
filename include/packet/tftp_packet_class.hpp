@@ -1,6 +1,6 @@
 /**
- * @file tftp-packet-class.hpp
- * @author Veronika Nevarilova
+ * @file tftp_packet_class.hpp
+ * @author Veronika Nevarilova (xnevar00)
  * @date 11/2023
  */
 
@@ -16,7 +16,8 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <vector>
-
+#include <cstring>
+#include <algorithm>
 
 /**
  * @class TFTPPacket

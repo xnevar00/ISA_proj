@@ -1,9 +1,10 @@
-// File:    output_handler.cpp
-// Author:  Veronika Nevarilova
-// Date:    11/2023
+/**
+ * @file output_handler.cpp
+ * @author Veronika Nevarilova (xnevar00)
+ * @date 11/2023
+ */
 
-#include <mutex>
-#include <iostream>
+
 #include "../../include/output_handler/output_handler.hpp"
 
 OutputHandler* OutputHandler::outputHandler_ = nullptr;;

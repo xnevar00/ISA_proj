@@ -1,10 +1,11 @@
-// File:    tftp-packet-class.cpp
-// Author:  Veronika Nevarilova
-// Date:    11/2023
+/**
+ * @file tftp_packet_class.cpp
+ * @author Veronika Nevarilova (xnevar00)
+ * @date 11/2023
+ */
 
-#include "../../include/packet/tftp-packet-class.hpp"
-#include <cstring>
-#include <algorithm>
+
+#include "../../include/packet/tftp_packet_class.hpp"
 
 std::pair<TFTPPacket *, int> TFTPPacket::parsePacket(std::string receivedMessage, std::string src_IP, int src_port, int dst_port)
 {

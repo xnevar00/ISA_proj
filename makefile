@@ -7,8 +7,8 @@ HEADERS_SERVER = include/server/server_class.hpp  # Přidáme server_class.hpp
 HEADERS_CLIENT = include/client/client_class.hpp
 SRC_HELPER_FUNCTIONS = src/helper_functions/helper_functions.cpp
 HEADERS_HELPER_FUNCTIONS = include/helper_functions/helper_functions.hpp
-SRC_TFTP_PACKET = src/packet/tftp-packet-class.cpp
-HEADERS_TFTP_PACKET = include/packet/tftp-packet-class.hpp
+SRC_TFTP_PACKET = src/packet/tftp_packet_class.cpp
+HEADERS_TFTP_PACKET = include/packet/tftp_packet_class.hpp
 SRC_OUTPUT_HANDLER = src/output_handler/output_handler.cpp
 HEADERS_OUTPUT_HANDLER = include/output_handler/output_handler.hpp
 

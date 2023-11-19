@@ -1,10 +1,9 @@
 /**
  * @file client_class.cpp
- * @author Veronika Nevarilova
+ * @author Veronika Nevarilova (xnevar00)
  * @date 11/2023
  */
 
-#include <iostream>
 #include "../../include/client/client_class.hpp"
 
 namespace fs = std::filesystem;
@@ -209,6 +208,7 @@ int Client::transferData() {
             {
                 block_size = 512;
                 timeout = INITIALTIMEOUT;
+                setTimeout(&udpSocket, timeout);
                 tsize = -1;
             }
 
