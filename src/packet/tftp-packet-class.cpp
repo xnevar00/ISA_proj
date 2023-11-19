@@ -35,12 +35,12 @@ std::pair<TFTPPacket *, int> TFTPPacket::parsePacket(std::string receivedMessage
     }
 
     int ok = packet->parse(receivedMessage);
-    if(ok == -1)
+    if(ok == -1)    // general error while parsing the packet
     {
         OutputHandler::getInstance()->print_to_cout("Error in packet parsing.");
         return {nullptr, -1};
     }
-    if (ok == -2)
+    if (ok == -2)   // error caused by options
     {
         OutputHandler::getInstance()->print_to_cout("Error in packet parsing.");
         return {nullptr, -2};
@@ -81,13 +81,14 @@ int TFTPPacket::sendAck(int block_number, int udp_socket, sockaddr_in addr, std:
 int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number, int client_port)
 {
     OutputHandler::getInstance()->print_to_cout("Waiting for ACK packet...");
-    char received_data[65507];
+    char received_data[MAXMESSAGESIZE];
     struct sockaddr_in addr;
     socklen_t addrLen = sizeof(addr);
 
     int bytesRead = recvfrom(udp_socket, received_data, sizeof(received_data), 0, (struct sockaddr*)&addr, &addrLen);
     if (bytesRead == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            // timeout
             return -3;
         } else {
             OutputHandler::getInstance()->print_to_cout("Error in recvfrom: " + std::string(strerror(errno)));
@@ -127,6 +128,7 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
     int bytesRead = recvfrom(udp_socket, received_data, sizeof(received_data), 0, (struct sockaddr*)&tmpClientAddr, &tmpClientAddrLen);
     if (bytesRead == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            // timeout
             return -3;
         } else {
             OutputHandler::getInstance()->print_to_cout("Error in recvfrom: " + std::string(strerror(errno)));
@@ -165,12 +167,14 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
 
     if ((unsigned short int)packet->data.size() < block_size)
     {
+        // data shorter than block size = last packet
         *last_packet = true;
     }
 
     std::vector<char> transfered_data;
     if (mode == "netascii")
     {
+        // handle '\r'
         for (size_t i = 0; i < packet->data.size(); i++) {
             if (*r_flag == true)
             {
@@ -205,6 +209,7 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
         transfered_data = packet->data;
     }
     
+    // add the received data to the file
     file->write(transfered_data.data(), transfered_data.size());
 
     if (*last_packet == true)
@@ -270,6 +275,7 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
     filename = getSingleArgument(filenameIndex, receivedMessage);
     if (filename == "")
     {
+        // could not parse filename
         OutputHandler::getInstance()->print_to_cout("Error parsing RRQ/WRQ packet. (1)");
         return -1;
     }
@@ -279,6 +285,7 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
     OutputHandler::getInstance()->print_to_cout("Mode: " + mode);
     if (mode != "netascii" && mode != "octet")
     {
+        // wrong mode
         OutputHandler::getInstance()->print_to_cout("Error parsing RRQ/WRQ packet. (2)");
         return -1;
     }
@@ -291,6 +298,7 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
         std::transform(option.begin(), option.end(), option.begin(), ::tolower);
         if (option == "")
         {
+            // could not parse option
             OutputHandler::getInstance()->print_to_cout("Error parsing RRQ/WRQ packet. (3)");
             return -2;
         }
@@ -365,7 +373,7 @@ int RRQWRQPacket::send(int udpSocket, sockaddr_in destination, std::vector<char>
     message.push_back('\0');
     message.insert(message.end(), mode.begin(), mode.end()); //mode
     message.push_back('\0');
-    if (blksize != -1)
+    if (blksize != -1)  // if blksize set
     {
         std::string blksize_str = std::to_string(blksize);
         message.insert(message.end(), "blksize", "blksize" + 7);
@@ -373,7 +381,7 @@ int RRQWRQPacket::send(int udpSocket, sockaddr_in destination, std::vector<char>
         message.insert(message.end(), blksize_str.begin(), blksize_str.end());
         message.push_back('\0');
     }
-    if (timeout != -1)
+    if (timeout != -1)  // if timeout set
     {
         std::string timeout_str = std::to_string(timeout);
         message.insert(message.end(), "timeout", "timeout" + 7);
@@ -381,7 +389,7 @@ int RRQWRQPacket::send(int udpSocket, sockaddr_in destination, std::vector<char>
         message.insert(message.end(), timeout_str.begin(), timeout_str.end());
         message.push_back('\0');
     }
-    if (tsize != -1)
+    if (tsize != -1)    // if tsize set
     {
         std::string tsize_str = std::to_string(tsize);
         message.insert(message.end(), "tsize", "tsize" + 5);
@@ -418,7 +426,7 @@ int DATAPacket::parse(std::string receivedMessage)
     blknum = (static_cast<unsigned char>(block_number_str[0]) << 8) | static_cast<unsigned char>(block_number_str[1]);
     OutputHandler::getInstance()->print_to_cout("Received data with block number: " + std::to_string(blknum));
 
-    std::string data_string = receivedMessage.substr(4);
+    std::string data_string = receivedMessage.substr(4);    // data starts at index 4
     std::vector<char> data_char(data_string.begin(), data_string.end());
     data = data_char;
 
@@ -501,7 +509,7 @@ int OACKPacket::parse(std::string receivedMessage) {
     }
 
     opcode = getOpcode(receivedMessage);
-    int optionIndex = 2;
+    int optionIndex = 2;    //agreed options start at index 2
     std::string option;
     while(optionIndex != -1 && optionIndex != (int)receivedMessage.length())
     {
@@ -556,7 +564,7 @@ int OACKPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> *
     std::vector<char> opcode = intToBytes(this->opcode);
     message.insert(message.end(), opcode.begin(), opcode.end()); //opcode
 
-    if (blksize_set == true)
+    if (blksize_set == true)    // if blksize set
     {
         std::string blksize_str = std::to_string(blksize);
         message.insert(message.end(), "blksize", "blksize" + 7);
@@ -564,7 +572,7 @@ int OACKPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> *
         message.insert(message.end(), blksize_str.begin(), blksize_str.end());
         message.push_back('\0');
     }
-    if (timeout != -1)
+    if (timeout != -1)  // if timeout set
     {
         std::string timeout_str = std::to_string(timeout);
         message.insert(message.end(), "timeout", "timeout" + 7);
@@ -572,7 +580,7 @@ int OACKPacket::send(int udpSocket, sockaddr_in destination, std::vector<char> *
         message.insert(message.end(), timeout_str.begin(), timeout_str.end());
         message.push_back('\0');
     }
-    if (tsize != -1)
+    if (tsize != -1) // if tsize set
     {
         std::string tsize_str = std::to_string(tsize);
         message.insert(message.end(), "tsize", "tsize" + 5);

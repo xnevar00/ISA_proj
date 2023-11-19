@@ -21,6 +21,7 @@ std::string getArgument(int startIndex, std::string receivedMessage)
     {
         return "";
     }
+    // find the first null byte after the start index
     size_t nullByteIndex = receivedMessage.find('\0', startIndex);
     if (nullByteIndex != std::string::npos) 
     {
@@ -37,6 +38,7 @@ int getAnotherStartIndex(int startIndex, std::string receivedMessage)
     size_t nullByteIndex = receivedMessage.find('\0', startIndex);
     if (nullByteIndex != std::string::npos) 
     {
+        //start index if always after zero byte
         return nullByteIndex + 1;
     } else 
     {
@@ -59,7 +61,9 @@ std::string getSingleArgument(int startIndex, std::string receivedMessage)
 int getOpcode(std::string receivedMessage)
 {
     int opcode = -1;
+    // opcode is in the first two bytes of 
     std::string opcode_str = receivedMessage.substr(0, 2);
+    // convert to int
     opcode = (static_cast<unsigned char>(opcode_str[0]) << 8) | static_cast<unsigned char>(opcode_str[1]);
     return opcode;
 }
@@ -180,6 +184,7 @@ void clean(std::ofstream *file, std::string file_path)
         file->close();
     }
 
+    // tries to delete the file
     if (remove(file_path.c_str()) != 0) {
         OutputHandler::getInstance()->print_to_cout("Error deleting file.");
     }

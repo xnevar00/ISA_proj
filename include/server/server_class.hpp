@@ -48,7 +48,7 @@ protected:
     Server(){}
 
     static Server* server_;
-    std::vector<std::thread> clientThreads;                 // vector of threads that handle the clients
+    std::vector<std::thread> clientThreads;        // vector of threads that handle the clients
 
     /**
      * @brief Creates a UDP socket.
@@ -131,7 +131,7 @@ class ClientHandler {
         int64_t timeout;                    // timeout value (default 2)
         int64_t block_size;                 // block size value (default 512)
         bool block_size_set;                // true if block size option was set
-        bool last_packet;                   // true if last packet was received/sent
+        bool last_packet;                   // true if last packet was received/sent, false otherwise
         std::string root_dirpath;           // path to the root directory
         int udpSocket;                      // udp socket used to communicate with the client
         bool r_flag;                        // flag if in the last packet on the last index was '\r' character (used for netascii mode)
@@ -170,12 +170,6 @@ class ClientHandler {
          * @return 0 if successful.
          */
         int transferFile();
-
-        /**
-         * @brief Handles receiving data from the client when uploading to the server.
-         * @return 0 if successful.
-         */
-        int receiveData();
 
         /**
          * @brief Writes data to the file when uploading to the server.

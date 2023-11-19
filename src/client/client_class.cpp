@@ -1,6 +1,8 @@
-// File:    client_class.cpp
-// Author:  Veronika Nevarilova
-// Date:    11/2023
+/**
+ * @file client_class.cpp
+ * @author Veronika Nevarilova
+ * @date 11/2023
+ */
 
 #include <iostream>
 #include "../../include/client/client_class.hpp"
@@ -128,16 +130,19 @@ int Client::transferData() {
 
     int bytesRead = -1;
     attempts_to_resend = 0;
+    // try to receive data from server but if it fails, try to resend request
     while((attempts_to_resend <= MAXRESENDATTEMPTS) && (bytesRead == -1))
     {
         bytesRead = recvfrom(udpSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&tmpServerAddr, &tmpServerAddrLen);
         if (bytesRead == -1) {
+            // timeout
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 attempts_to_resend++;
                 if (attempts_to_resend <= MAXRESENDATTEMPTS)
                 {
                     OutputHandler::getInstance()->print_to_cout("Resending REQUEST... (" + std::to_string(attempts_to_resend) + ")" );
-                    resendData(udpSocket, serverAddr, last_data);       
+                    resendData(udpSocket, serverAddr, last_data);  
+                    // exponentially increase timeout     
                     timeout *= 2;
                     setTimeout(&udpSocket, timeout);
                 }
@@ -153,11 +158,19 @@ int Client::transferData() {
         return -1;
     }
 
+    // if received packet but it took more than one resend, set the timeout back to initial value
+    if (timeout != INITIALTIMEOUT)
+    {
+        timeout = INITIALTIMEOUT;
+        setTimeout(&udpSocket, timeout);
+    }
+
     serverAddr = tmpServerAddr;
     serverPort = getPort(serverAddr);
 
     std::string receivedMessage(buffer, bytesRead);
 
+    // get the packet parsed for easier manipulation with the data
     auto [packet, ok] = TFTPPacket::parsePacket(receivedMessage, getIPAddress(tmpServerAddr), ntohs(tmpServerAddr.sin_port), getLocalPort(udpSocket));
     if (ok != 0)
     {
@@ -185,6 +198,7 @@ int Client::transferData() {
                 return -1;
             }
             OutputHandler::getInstance()->print_to_cout("Received OACK packet.");
+            //update options to use only the ones the server agreed on
             updateAcceptedOptions(packet);
             break;
 
@@ -235,9 +249,11 @@ int Client::handleSendingData()
         bytesRead = std::cin.gcount();
     } else if (mode == "netascii")
     {
+        //if the mode is set to netascii, need to handle the '\r' and '\n' characters
         std::cin.get(c);
         if (overflow != "")
         {
+            // first add the overflow from the last packet
             while(overflow != "" && (int)bytesRead < block_size)
             {
                 data.push_back(overflow[0]);
@@ -278,7 +294,7 @@ int Client::handleSendingData()
             }
             std::cin.get(c);
         }
-        overflow += c;
+        overflow += c;  // overflow are the characters that didnt fit into the block, will be sent in the next block
         if (std::cin.fail() && !std::cin.eof())
         {
             TFTPPacket::sendError(udpSocket, serverAddr, 3, "Disk full or allocation exceeded.");
@@ -298,7 +314,9 @@ int Client::handleSendingData()
 
 int Client::transferFile()
 {
+    // finite state machine used for transfer of the data
     int ok = 0;
+    // the transfer will end due to timeout or receiving the last packet of the transfered file
     while(last_packet == false && attempts_to_resend < MAXRESENDATTEMPTS)
     {
         switch(current_state){
@@ -331,9 +349,11 @@ int Client::transferFile()
                     return -1;
                 } else if (ok == -2)
                 {
+                    // received data from some other application, ignore it and wait for the next packet from uur client
                     current_state = TransferState::ReceiveData;
                 } else if (ok == -3)
                 {
+                    // timeout, resending
                     attempts_to_resend++;
                     if (attempts_to_resend <= MAXRESENDATTEMPTS)
                     {
@@ -345,6 +365,7 @@ int Client::transferFile()
                     setTimeout(&udpSocket, timeout);
                     break;
                 }
+                // received data, setting the timeout back to initial value
                 attempts_to_resend = 0;
                 timeout = INITIALTIMEOUT;
                 setTimeout(&udpSocket, timeout);
@@ -368,8 +389,13 @@ int Client::transferFile()
                     OutputHandler::getInstance()->print_to_cout("Illegal TFTP operation");
                     TFTPPacket::sendError(udpSocket, serverAddr, 4, "Illegal TFTP operation.");
                     return -1;
+                }  else if (ok == -2)
+                {
+                    // received data from some other application, ignore it and wait for the next packet from uur client
+                    current_state = TransferState::ReceiveAck;
                 } else if (ok == -3)
                 {
+                    // timeout
                     attempts_to_resend++;
                     if (attempts_to_resend <= MAXRESENDATTEMPTS)
                     {
@@ -381,6 +407,7 @@ int Client::transferFile()
                     setTimeout(&udpSocket, timeout);
                     break;
                 }
+                // set the timeout to initial value
                 attempts_to_resend = 0;
                 timeout = INITIALTIMEOUT;
                 setTimeout(&udpSocket, timeout);
@@ -390,11 +417,19 @@ int Client::transferFile()
                 break;
         }
     }
+    // it the transfer ended due to timeout, aborting
+    if (attempts_to_resend >= MAXRESENDATTEMPTS)
+    {
+        OutputHandler::getInstance()->print_to_cout("Server is not responding, aborting.");
+        return -1;
+    }
 
+    // if server received the last packet, wait for ACK
     if (direction == Direction::Upload)
     {
         ok = -1;
-        while(ok != 0 && attempts_to_resend < MAXRESENDATTEMPTS)
+        // until received ACK or tried to resend the packet maximum of times, wait for the ACK
+        while(ok != 0 && attempts_to_resend <= MAXRESENDATTEMPTS)
         {
             ok = TFTPPacket::receiveAck(udpSocket, block_number, serverPort);
             if (ok == -1)
@@ -404,6 +439,7 @@ int Client::transferFile()
                 return -1;
             } else if (ok == -3)
             {
+                //timeout
                 attempts_to_resend++;
                 OutputHandler::getInstance()->print_to_cout("Resending DATA... (" + std::to_string(attempts_to_resend) + ")" );
                 resendData(udpSocket, serverAddr, last_data);
@@ -411,6 +447,12 @@ int Client::transferFile()
                 OutputHandler::getInstance()->print_to_cout("Setting timeout to: " + std::to_string(timeout));
                 setTimeout(&udpSocket, timeout);
             }
+        }
+        if (attempts_to_resend >= MAXRESENDATTEMPTS && ok != 0)
+        {
+            // waiting for the ACK timed out, aborting
+            OutputHandler::getInstance()->print_to_cout("Server is not responding, aborting.");
+            return -1;
         }
     } else 
     {
@@ -429,6 +471,7 @@ int Client::transferFile()
 
 void Client::updateAcceptedOptions(TFTPPacket *packet)
 {
+    // set the values to initial
     if (packet->blksize == -1 && block_size != 512)
     {
         block_size = 512;
