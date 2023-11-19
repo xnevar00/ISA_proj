@@ -43,5 +43,4 @@ public:
     // mutexes used for thread-safe printing
     std::mutex cout_mutex;
     std::mutex cerr_mutex;
-
 };
