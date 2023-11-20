@@ -83,7 +83,7 @@ int setOption(int64_t *option, int *optionIndex, std::string receivedMessage, st
     {
         if (option_str.length() > MAXOPTIONNUMERALS)
         {
-            *option = MAXTSIZEVALUE + 1; // set to invalid value
+            *option = MAXTSIZEVALUE; // set to invalid value
         } else 
         {
             *option = std::stoll(option_str);
@@ -190,8 +190,9 @@ void clean(std::ofstream *file, std::string file_path)
 
     // tries to delete the file
     if (remove(file_path.c_str()) != 0) {
-        OutputHandler::getInstance()->print_to_cout("Error deleting file.");
+        return;
     }
+    return;
 }
 
 int getFileSize(std::string root_ditpath, std::string filepath)

@@ -239,6 +239,10 @@ int Client::transferData() {
                 timeout = INITIALTIMEOUT;
                 tsize = -1;
             }
+            if (packet->data.size() < static_cast<std::vector<char>::size_type>(block_size))
+            {
+                last_packet = true;
+            }
             block_number++;
             file.write(packet->data.data(), packet->data.size());
             break;
@@ -265,6 +269,10 @@ int Client::transferData() {
             file.close();
         }
         return -1;
+    }
+    if (file.is_open())
+    {
+        file.close();
     }
 
     return 0;
@@ -378,15 +386,16 @@ int Client::transferFile()
                 
             case TransferState::ReceiveData:
                 ok = TFTPPacket::receiveData(udpSocket, block_number, block_size, &(file), &(last_packet), serverPort, &r_flag, mode);
-                if (ok == -1)
+                if (ok == StatusCode::PARSING_ERROR)
                 {
                     //error already handled
                     return -1;
-                } else if (ok == -2)
+                } else if (ok == StatusCode::UNK_TID)
                 {
                     // received data from some other application, ignore it and wait for the next packet from uur client
+                    OutputHandler::getInstance()->print_to_cout("Unknown transfer ID.");
                     current_state = TransferState::ReceiveData;
-                } else if (ok == -3)
+                } else if (ok == StatusCode::TIMEOUT)
                 {
                     // timeout, resending
                     attempts_to_resend++;
@@ -399,7 +408,7 @@ int Client::transferFile()
                     timeout *= 2;
                     setTimeout(&udpSocket, timeout);
                     break;
-                } else if (ok == -4)
+                } else if (ok == StatusCode::RECV_ERR)
                 {
                     OutputHandler::getInstance()->print_to_cout("Received ERROR from server. Aborting.");
                     return -1;
@@ -423,16 +432,17 @@ int Client::transferFile()
 
             case TransferState::ReceiveAck:
                 ok = TFTPPacket::receiveAck(udpSocket, block_number, serverPort);
-                if (ok == -1)
+                if (ok == StatusCode::PARSING_ERROR)
                 {
                     OutputHandler::getInstance()->print_to_cout("Illegal TFTP operation");
                     TFTPPacket::sendError(udpSocket, serverAddr, 4, "Illegal TFTP operation.");
                     return -1;
-                }  else if (ok == -2)
+                }  else if (ok == StatusCode::UNK_TID)
                 {
                     // received data from some other application, ignore it and wait for the next packet from uur client
+                    OutputHandler::getInstance()->print_to_cout("Unknown transfer ID.");
                     current_state = TransferState::ReceiveAck;
-                } else if (ok == -3)
+                } else if (ok == StatusCode::TIMEOUT)
                 {
                     // timeout
                     attempts_to_resend++;
@@ -445,7 +455,7 @@ int Client::transferFile()
                     timeout *= 2;
                     setTimeout(&udpSocket, timeout);
                     break;
-                } else if (ok == -4)
+                } else if (ok == StatusCode::RECV_ERR)
                 {
                     OutputHandler::getInstance()->print_to_cout("Received ERROR from server. Aborting.");
                     return -1;
@@ -480,12 +490,17 @@ int Client::transferFile()
         while(ok != 0 && attempts_to_resend <= MAXRESENDATTEMPTS && !terminateClient)
         {
             ok = TFTPPacket::receiveAck(udpSocket, block_number, serverPort);
-            if (ok == -1)
+            if (ok == StatusCode::PARSING_ERROR)
             {
                 OutputHandler::getInstance()->print_to_cout("Illegal TFTP operation");
                 TFTPPacket::sendError(udpSocket, serverAddr, 4, "Illegal TFTP operation.");
                 return -1;
-            } else if (ok == -3)
+            } if (ok == StatusCode::UNK_TID)
+            {
+                OutputHandler::getInstance()->print_to_cout("Unknown transfer ID.");
+                continue;
+            }
+            else if (ok == StatusCode::TIMEOUT)
             {
                 //timeout
                 attempts_to_resend++;
@@ -494,7 +509,7 @@ int Client::transferFile()
                 timeout *= 2;
                 OutputHandler::getInstance()->print_to_cout("Setting timeout to: " + std::to_string(timeout));
                 setTimeout(&udpSocket, timeout);
-            } else if (ok == -4)
+            } else if (ok == StatusCode::RECV_ERR)
             {
                 OutputHandler::getInstance()->print_to_cout("Received ERROR from server. Aborting.");
                 return -1;

@@ -90,24 +90,24 @@ int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number, int clie
     if (bytesRead == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             // timeout
-            return -3;
+            return StatusCode::TIMEOUT;
         } else {
             OutputHandler::getInstance()->print_to_cout("Error in recvfrom: " + std::string(strerror(errno)));
-            return -1;
+            return StatusCode::PARSING_ERROR;
         }
     }
 
     if (getPort(addr) != client_port)
     {
         TFTPPacket::sendError(udp_socket, addr, 5, "Unknown transfer ID.");
-        return -2;
+        return StatusCode::UNK_TID;
     }
 
     std::string received_message(received_data, bytesRead);
     OutputHandler::getInstance()->print_to_cout("Received ACK packet.");
     if (bytesRead < 4) //4 bytes is the size of ACK packet
     {
-        return -1;
+        return StatusCode::PARSING_ERROR;
     }
 
     auto [packet, ok] = TFTPPacket::parsePacket(received_message, getIPAddress(addr), ntohs(addr.sin_port), getLocalPort(udp_socket));
@@ -115,19 +115,19 @@ int TFTPPacket::receiveAck(int udp_socket, short unsigned block_number, int clie
     {
         if (packet->opcode == Opcode::ERROR)
         {
-            return -5;
+            return StatusCode::RECV_ERR;
         } else 
         {
             TFTPPacket::sendError(udp_socket, addr, 4, "Illegal TFTP operation.");
-            return -2;
+            return StatusCode::PARSING_ERROR;
         }
     }
     if ((ok == -1) || (packet->blknum != block_number))
     {
-        return -1;
+        return StatusCode::PARSING_ERROR;
     }
 
-    return 0;
+    return StatusCode::SUCCESS;
 }
 
 int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, std::ofstream *file, bool *last_packet, int client_port, bool *r_flag, std::string mode)
@@ -141,23 +141,23 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
     if (bytesRead == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             // timeout
-            return -3;
+            return StatusCode::TIMEOUT;
         } else {
             OutputHandler::getInstance()->print_to_cout("Error in recvfrom: " + std::string(strerror(errno)));
-            return -1;
+            return StatusCode::PARSING_ERROR;
         }
     }
     if (getPort(tmpClientAddr) != client_port)
     {
         TFTPPacket::sendError(udp_socket, tmpClientAddr, 5, "Unknown transfer ID.");
-        return -2;
+        return StatusCode::UNK_TID;
     }
 
     std::string received_message(received_data, bytesRead);
     if (bytesRead < 4) //4 bytes is the size of DATA packet
     {
         TFTPPacket::sendError(udp_socket, tmpClientAddr, 4, "Illegal TFTP operation.");
-        return -1;
+        return StatusCode::PARSING_ERROR;
     }
 
     auto [packet, ok] = TFTPPacket::parsePacket(received_message, getIPAddress(tmpClientAddr), ntohs(tmpClientAddr.sin_port), getLocalPort(udp_socket));
@@ -165,22 +165,22 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
     {
         if (packet->opcode == Opcode::ERROR)
         {
-            return -5;
+            return StatusCode::RECV_ERR;
         } else 
         {
             TFTPPacket::sendError(udp_socket, tmpClientAddr, 4, "Illegal TFTP operation.");
-            return -2;
+            return StatusCode::PARSING_ERROR;
         }
     }
     if (ok != 0 || (packet->opcode != Opcode::DATA && packet->opcode != Opcode::ERROR) || (packet->data.size() > (long unsigned)block_size))
     {
         TFTPPacket::sendError(udp_socket, tmpClientAddr, 4, "Illegal TFTP operation.");
-        return -1;
+        return StatusCode::PARSING_ERROR;
     }
     if (packet->blknum != block_number)
     {
         OutputHandler::getInstance()->print_to_cout("Wrong block number!");
-        return -1;
+        return StatusCode::PARSING_ERROR;
     }
 
     if ((unsigned short int)packet->data.size() < block_size)
@@ -234,7 +234,7 @@ int TFTPPacket::receiveData(int udp_socket, int block_number, int block_size, st
     {
         file->close();
     }
-    return 0;
+    return StatusCode::SUCCESS;
 }
 
 int TFTPPacket::sendData(int udp_socket, sockaddr_in addr, int block_number, int block_size, int bytes_read, std::vector<char> data, bool *last_packet, std::vector<char> *last_data)
@@ -374,9 +374,8 @@ int RRQWRQPacket::parse(std::string receivedMessage) {
                 return -2;
             }
         } else {
-            //skipping unknown option           55----1 => 551
+            //skipping unknown option         
             optionIndex = getAnotherStartIndex(optionIndex, receivedMessage);
-            std::cout << "Option: "  << optionIndex << std::endl;
             if (optionIndex == -1)
             {
                 OutputHandler::getInstance()->print_to_cout("Error parsing RRQ/WRQ packet. (11)");

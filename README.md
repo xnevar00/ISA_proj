@@ -4,6 +4,16 @@ Veronika Nevařilová (`xnevar00`), 19.11.2023
 Program implementuje klientskou a serverovou část aplikace pro přenos souborů prostřednictvím TFTP.
 Umožňuje přenášet po síti jak textové, tak binární soubory.
 
+### Klient
+Klient se spouští pomocí příkazu `tftp-client -h hostname [-p port] [-f filepath] -t dest_filepath`
+
+* `-h hostname` IP adresa nebo doménový název vzdáleného serveru
+* `-p port` nepovinný argument, port, na kterém kontaktuje klient server při pokusu o navázání komunikace. Pokud není zadán, používá se výchozí port 69.
+* `-f filepath` cesta ke stahovanému souboru na serveru (download), pokud není zadán, bere se obsah stdin (upload)
+* `-t dest_filepath` cesta, pod kterou bude soubor na klientu/serveru uložen
+
+Klient je nastaven tak, že nepodporuje žádná rozšíření. Každopádně rozšíření jsou v implementaci zanesena a kromě tsize se dají i funkčně nastavit, to bylo ovšem implementováno hlavně z důvodu ladění serveru. Podobně jako server má klient výchozí timeout 2 sekundy a mód pro přenos je nastaven na `octet`.
+
 ### Server
 Server se spouští příkazem `tftp-server [-p port] root_dirpath`
 
@@ -16,16 +26,6 @@ Server implementuje následující rozšíření:
 * TFTP Timeout Interval and Transfer Size Options (RFC 2349)
 
 Výchozí timeout serveru je nastaven na 2 sekundy, přičemž při neúspěšném pokusu o obdržení odpovědi se doba čekání po novém zaslání packetu exponenciálně prodlužuje 2x. Po 5 neúspěšných pokusech server komunikaci ukončuje.
-
-### Klient
-Klient se spouští pomocí příkazu `tftp-client -h hostname [-p port] [-f filepath] -t dest_filepath`
-
-* `-h hostname` IP adresa nebo doménový název vzdáleného serveru
-* `-p port` nepovinný argument, port, na kterém kontaktuje klient server při pokusu o navázání komunikace
-* `-f filepath` cesta ke stahovanému souboru na serveru (download), pokud není zadán, bere se obsah stdin (upload)
-* `-t dest_filepath` cesta, pod kterou bude soubor na klientu/serveru uložen
-
-Klient je nastaven tak, že nepodporuje žádná rozšíření. Každopádně rozšíření jsou v implementaci zanesena a kromě tsize se dají i funkčně nastavit, to bylo ovšem implementováno hlavně z důvodu ladění serveru. Podobně jako server má klient výchozí timeout 2 sekundy a mód pro přenos je nastaven na `octet`.
 
 ### Seznam souborů projektu:
 #### Zdrojové soubory

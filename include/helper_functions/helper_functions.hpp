@@ -16,12 +16,13 @@
 #include <cerrno>
 #include <cstdio>
 #include <sys/statvfs.h>
+#include <cstdint>
 #include "output_handler/output_handler.hpp"
 
 #define IPADDRLEN 16
 #define MINPORTVALUE 1
 #define MAXPORTVALUE 65535
-#define MAXTSIZEVALUE 4294967295
+#define MAXTSIZEVALUE 9223372036854775807
 #define MAXBLKSIZEVALUE 65464
 #define MAXTIMEOUTVALUE 255
 #define MAXRESENDATTEMPTS 4
@@ -41,10 +42,11 @@ enum Opcode {
 
 enum StatusCode {
     SUCCESS = 0,
-    INVALID_ARGUMENTS = -1,
-    SOCKET_ERROR = -2,
-    CONNECTION_ERROR = -3,
-    PACKET_ERROR = -4,
+    PARSING_ERROR = -1,
+    UNK_TID = -2,
+    TIMEOUT = -3,
+    RECV_ERR = -4,
+    OTHER = -5,
 };
 
 // states for the finite state machine

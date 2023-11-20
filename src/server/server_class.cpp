@@ -272,7 +272,7 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
     mode = packet->mode;
 
     // if client sent illegal options, the server will not give them to the oack packet and will use default values
-    if (packet->timeout > MAXTIMEOUTVALUE)
+    if (packet->timeout > MAXTIMEOUTVALUE || packet->timeout <= 0)
     {
         timeout = INITIALTIMEOUT;
         packet->timeout = -1;
@@ -286,10 +286,15 @@ void ClientHandler::handlePacket(TFTPPacket *packet)
         block_size = MAXBLKSIZEVALUE;
         block_size_set = true;
     }
-    if ((packet->tsize > MAXTSIZEVALUE && direction == Direction::Upload) || (packet->tsize != 0 && direction == Direction::Download))
+    if ((packet->tsize != 0 && direction == Direction::Download))
     {
         tsize = -1;
         packet->tsize = -1;
+    }
+    if (packet->tsize > MAXTSIZEVALUE && direction == Direction::Upload)
+    {
+        tsize = MAXTSIZEVALUE;
+        packet->tsize = MAXTSIZEVALUE;
     }
 
     // if tsize was requested/sent byt the client
@@ -601,17 +606,17 @@ int ClientHandler::transferFile()
 
             case TransferState::ReceiveData:
                 ok = TFTPPacket::receiveData(udpSocket, block_number, block_size, &(file), &(last_packet), clientPort, &r_flag, mode);
-                if (ok == -1)
+                if (ok == StatusCode::PARSING_ERROR)
                 {
                     OutputHandler::getInstance()->print_to_cout("Illegal TFTP operation.");
                     TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP Operation.");
-                } else if (ok == -2)
+                } else if (ok == StatusCode::UNK_TID)
                 {
                     // received data from someone else, wait for data from out client
                     OutputHandler::getInstance()->print_to_cout("Unknown transfer ID.");
                     current_state = TransferState::ReceiveData;
                     break;
-                } else if (ok == -3)
+                } else if (ok == StatusCode::TIMEOUT)
                 {
                     // timeout
                     attempts_to_resend++;
@@ -625,11 +630,11 @@ int ClientHandler::transferFile()
                     timeout *= 2;
                     setTimeout(&udpSocket, timeout);
                     break;
-                } else if (ok == -4)
+                } else if (ok == StatusCode::RECV_ERR)
                 {
                     OutputHandler::getInstance()->print_to_cout("Received ERROR from client, aborting.");
                     return -1;
-                } else if (ok == -5)
+                } else if (ok == StatusCode::OTHER)
                 {
                     OutputHandler::getInstance()->print_to_cout("An errror occured, aborting.");
                     return -1;
@@ -654,18 +659,18 @@ int ClientHandler::transferFile()
 
             case TransferState::ReceiveAck:
                 ok = TFTPPacket::receiveAck(udpSocket, block_number, clientPort);
-                if (ok == -1)
+                if (ok == StatusCode::PARSING_ERROR)
                 {
                     OutputHandler::getInstance()->print_to_cout("Illegal TFTP operation.");
                     TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
                     return -1;
-                }  else if (ok == -2)
+                }  else if (ok == StatusCode::UNK_TID)
                 {
                     // received data from someone else, wait for data from out client
                     OutputHandler::getInstance()->print_to_cout("Unknown transfer ID.");
                     current_state = TransferState::ReceiveAck;
                     break;
-                } else if (ok == -3)
+                } else if (ok == StatusCode::TIMEOUT)
                 {
                     attempts_to_resend++;
                     if (attempts_to_resend <= MAXRESENDATTEMPTS)
@@ -679,11 +684,11 @@ int ClientHandler::transferFile()
                     OutputHandler::getInstance()->print_to_cout("Setting timeout to: " + std::to_string(timeout));
                     setTimeout(&udpSocket, timeout);
                     break;
-                } else if (ok == -4)
+                } else if (ok == StatusCode::RECV_ERR)
                 {
                     OutputHandler::getInstance()->print_to_cout("Received ERROR from client, aborting.");
                     return -1;
-                } else if (ok == -5)
+                } else if (ok == StatusCode::OTHER)
                 {
                     OutputHandler::getInstance()->print_to_cout("An errror occured, aborting.");
                     return -1;
@@ -736,12 +741,18 @@ int ClientHandler::transferFile()
         while(ok != 0 && attempts_to_resend < MAXRESENDATTEMPTS && !terminateThreadsServer)
         {   
             ok = TFTPPacket::receiveAck(udpSocket, block_number, clientPort);
-            if (ok == -1)
+            if (ok == StatusCode::PARSING_ERROR)
             {
                 OutputHandler::getInstance()->print_to_cout("Illegal TFTP operation.");
                 TFTPPacket::sendError(udpSocket, clientAddr, 4, "Illegal TFTP operation.");
                 return -1;
-            } else if (ok == -3)
+            } else if (ok == StatusCode::UNK_TID)
+            {
+                // received data from someone else, wait for data from out client
+                OutputHandler::getInstance()->print_to_cout("Unknown transfer ID.");
+                continue;
+            
+            } else if (ok == StatusCode::TIMEOUT)
             {
                 attempts_to_resend++;
                 OutputHandler::getInstance()->print_to_cout("Resending DATA... (" + std::to_string(attempts_to_resend) + ")");
