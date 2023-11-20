@@ -445,6 +445,11 @@ int ClientHandler::setupFileForDownload()
     OutputHandler::getInstance()->print_to_cout("Setting up file for download.");
     full_filepath = root_dirpath + "/" + filename;
 
+    if (!fs::exists(root_dirpath)) {
+        OutputHandler::getInstance()->print_to_cout("Root directory does not exist.");
+        fs::create_directory(root_dirpath);
+    }
+
     if(!(fs::exists(full_filepath)))
     {
         OutputHandler::getInstance()->print_to_cout("File not found.");
@@ -464,6 +469,12 @@ int ClientHandler::setupFileForDownload()
 int ClientHandler::setupFileForUpload()
 {
     full_filepath = root_dirpath + "/" + filename;
+
+    if (!fs::exists(root_dirpath)) {
+        OutputHandler::getInstance()->print_to_cout("Root directory does not exist.");
+        fs::create_directory(root_dirpath);
+    }
+
     if(fs::exists(full_filepath))
     {
         OutputHandler::getInstance()->print_to_cout("File already exists.");
