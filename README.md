@@ -1,6 +1,9 @@
 # Projekt do předmětu ISA
 Veronika Nevařilová (`xnevar00`), 19.11.2023
 
+### Výsledné hodnocení
+18.5/20 (-1.5 za dokumentaci, programová část 100%)
+
 Program implementuje klientskou a serverovou část aplikace pro přenos souborů prostřednictvím TFTP.
 Umožňuje přenášet po síti jak textové, tak binární soubory.
 
